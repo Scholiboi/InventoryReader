@@ -2,12 +2,12 @@ package inventoryreader.ir;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.screen.ScreenHandler;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 
 public class StorageViewerMod implements ClientModInitializer{
-    private static ScreenHandler lastScreenHandler = null;
+    private static AbstractContainerMenu lastScreenHandler = null;
     private final StorageReader storageReader = StorageReader.getInstance();
     private final SackReader sackReader = SackReader.getInstance();
     private int tickCounter = 0;
@@ -19,9 +19,9 @@ public class StorageViewerMod implements ClientModInitializer{
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndClientTick);
     }
 
-    private void onEndClientTick(MinecraftClient client) {
-        if (client.currentScreen != null && client.player != null) {
-            ScreenHandler currentHandler = client.player.currentScreenHandler;
+    private void onEndClientTick(Minecraft client) {
+        if (client.screen != null && client.player != null) {
+            AbstractContainerMenu currentHandler = client.player.containerMenu;
 
             if (currentHandler != lastScreenHandler) {
                 lastScreenHandler = currentHandler;
@@ -38,15 +38,15 @@ public class StorageViewerMod implements ClientModInitializer{
         }
     }
 
-    private void handleMenuOpen(MinecraftClient client) {
-        Screen currentScreen = client.currentScreen;
+    private void handleMenuOpen(Minecraft client) {
+        Screen currentScreen = client.screen;
         if (currentScreen.getClass().getName().contains("SandboxViewer")) {
             return;
         }
         String title = currentScreen.getTitle().getString();
-        storageReader.saveContainerContents(client.player.currentScreenHandler, title);
+        storageReader.saveContainerContents(client.player.containerMenu, title);
         if (title.contains("Sack")) {
-            sackReader.saveLoreComponents(client.player.currentScreenHandler, title);
+            sackReader.saveLoreComponents(client.player.containerMenu, title);
         }
     }
 }

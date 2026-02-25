@@ -3,15 +3,16 @@ package inventoryreader.ir;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import java.util.stream.Collectors;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 
 public class WidgetCustomizationMenu extends Screen {
     private enum Tab {
@@ -21,7 +22,7 @@ public class WidgetCustomizationMenu extends Screen {
     private final SandboxWidget widget;
     private final RecipeManager recipeManager;
     private final ResourcesManager resourcesManager;
-    private TextFieldWidget searchField;
+    private EditBox searchField;
     private List<String> filteredRecipes;
     private int scrollOffset = 0;
     private final int MAX_RECIPES_SHOWN = 10;
@@ -48,13 +49,13 @@ public class WidgetCustomizationMenu extends Screen {
     private ResizeCorner activeCorner = ResizeCorner.NONE;
     private static final int RESIZE_HANDLE_SIZE = 10;
     private Tab currentTab = Tab.RECIPE_SELECTION;
-    private ButtonWidget recipeTabButton;
-    private ButtonWidget positioningTabButton;
+    private Button recipeTabButton;
+    private Button positioningTabButton;
     private int craftAmount;
-    private TextFieldWidget craftAmountField;
+    private EditBox craftAmountField;
 
     public WidgetCustomizationMenu() {
-        super(Text.literal("Widget Customization"));
+        super(Component.literal("Widget Customization"));
         this.widget = SandboxWidget.getInstance();
         this.recipeManager = RecipeManager.getInstance();
         this.resourcesManager = ResourcesManager.getInstance();
@@ -80,30 +81,30 @@ public class WidgetCustomizationMenu extends Screen {
     @Override
     protected void init() {
         super.init();
-        recipeTabButton = ButtonWidget.builder(
-            Text.literal("Recipe Selection"),
+        recipeTabButton = Button.builder(
+            Component.literal("Recipe Selection"),
             button -> switchTab(Tab.RECIPE_SELECTION)
         )
-        .dimensions(20, 20, 150, 20)
+        .bounds(20, 24, 150, 18)
         .build();
-        positioningTabButton = ButtonWidget.builder(
-            Text.literal("Widget Positioning"),
+        positioningTabButton = Button.builder(
+            Component.literal("Widget Positioning"),
             button -> switchTab(Tab.POSITIONING)
         )
-        .dimensions(180, 20, 150, 20)
+        .bounds(180, 24, 150, 18)
         .build();
-        addDrawableChild(recipeTabButton);
-        addDrawableChild(positioningTabButton);
+        addRenderableWidget(recipeTabButton);
+        addRenderableWidget(positioningTabButton);
         updateTabButtonStyles();
         if (currentTab == Tab.RECIPE_SELECTION) {
             initRecipeTab();
             
-            ButtonWidget toggleButton = ButtonWidget.builder(
-                widget.isEnabled() ? Text.literal("Disable Widget") : Text.literal("Enable Widget"),
+            Button toggleButton = Button.builder(
+                widget.isEnabled() ? Component.literal("Disable Widget") : Component.literal("Enable Widget"),
                 button -> {
                     boolean newState = !widget.isEnabled();
                     widget.setEnabled(newState);
-                    button.setMessage(newState ? Text.literal("Disable Widget") : Text.literal("Enable Widget"));
+                    button.setMessage(newState ? Component.literal("Disable Widget") : Component.literal("Enable Widget"));
                     
                     if (selectedRecipe != null && newState) {
                         widget.setSelectedRecipe(selectedRecipe);
@@ -111,48 +112,48 @@ public class WidgetCustomizationMenu extends Screen {
                     }
                     widget.saveConfiguration();
                     
-                    MinecraftClient client = MinecraftClient.getInstance();
+                    Minecraft client = Minecraft.getInstance();
                     if (client.player != null) {
-                        Text message = Text.literal("Widget " + (newState ? "enabled!" : "disabled!"))
-                            .setStyle(Style.EMPTY.withColor(newState ? Formatting.GREEN : Formatting.RED));
-                        client.player.sendMessage(message, true);
+                        Component message = Component.literal("Widget " + (newState ? "enabled!" : "disabled!"))
+                            .setStyle(Style.EMPTY.withColor(newState ? ChatFormatting.GREEN : ChatFormatting.RED));
+                        client.player.displayClientMessage(message, true);
                     }
                 }
             )
-            .dimensions(20, height - 30, 150, 20)
+            .bounds(20, height - 30, 150, 20)
             .build();
-            addDrawableChild(toggleButton);
+            addRenderableWidget(toggleButton);
         } else {
             initPositioningTab();
         }
         if (currentTab != Tab.POSITIONING) {
-            ButtonWidget saveButton = ButtonWidget.builder(
-                Text.literal("Save Configuration"),
+            Button saveButton = Button.builder(
+                Component.literal("Save Configuration"),
                 button -> saveWidgetConfiguration()
             )
-            .dimensions(width - 170, height - 30, 150, 20)
+            .bounds(width - 170, height - 30, 150, 20)
             .build();
-            addDrawableChild(saveButton);
+            addRenderableWidget(saveButton);
         }
     }
 
     private void initRecipeTab() {
-        searchField = new TextFieldWidget(textRenderer, 20, 55, 215, 20, Text.literal(""));
+        searchField = new EditBox(font, 20, 55, 215, 20, Component.literal(""));
         searchField.setMaxLength(50);
-        searchField.setPlaceholder(Text.literal("Search recipes..."));
-        searchField.setChangedListener(this::updateFilteredRecipes);
-        addDrawableChild(searchField);
-        craftAmountField = new TextFieldWidget(textRenderer, 236, 55, 35, 20, Text.literal(""));
-        craftAmountField.setText(String.valueOf(craftAmount));
-        craftAmountField.setChangedListener(this::updateCraftAmount);
-        addDrawableChild(craftAmountField);
-        ButtonWidget applyButton = ButtonWidget.builder(
-            Text.literal("Apply Recipe to Widget"),
+        searchField.setHint(Component.literal("Search recipes..."));
+        searchField.setResponder(this::updateFilteredRecipes);
+        addRenderableWidget(searchField);
+        craftAmountField = new EditBox(font, 236, 55, 35, 20, Component.literal(""));
+        craftAmountField.setValue(String.valueOf(craftAmount));
+        craftAmountField.setResponder(this::updateCraftAmount);
+        addRenderableWidget(craftAmountField);
+        Button applyButton = Button.builder(
+            Component.literal("Apply Recipe to Widget"),
             button -> applyConfiguration()
         )
-        .dimensions(width / 2 - 90, height - 30, 180, 20)
+        .bounds(width / 2 - 90, height - 30, 180, 20)
         .build();
-        addDrawableChild(applyButton);
+        addRenderableWidget(applyButton);
     }
 
     private void initPositioningTab() {
@@ -162,36 +163,36 @@ public class WidgetCustomizationMenu extends Screen {
         int y = height - bottomMargin;
         int spacing = 10;
 
-        ButtonWidget applyButton = ButtonWidget.builder(
-            Text.literal("Apply Configuration"),
+        Button applyButton = Button.builder(
+            Component.literal("Apply Configuration"),
             button -> applyConfiguration()
         )
-        .dimensions(width / 2 - buttonWidth - spacing/2, y, buttonWidth, buttonHeight)
+        .bounds(width / 2 - buttonWidth - spacing/2, y, buttonWidth, buttonHeight)
         .build();
-        addDrawableChild(applyButton);
+        addRenderableWidget(applyButton);
 
-        ButtonWidget resetButton = ButtonWidget.builder(
-            Text.literal("Reset Position"),
+        Button resetButton = Button.builder(
+            Component.literal("Reset Position"),
             button -> {
                 widgetPositionX = 10;
                 widgetPositionY = 40;
                 widget.setWidgetPosition(widgetPositionX, widgetPositionY);
-                MinecraftClient client = MinecraftClient.getInstance();
+                Minecraft client = Minecraft.getInstance();
                 if (client.player != null) {
-                    Text message = Text.literal("Widget position reset!")
-                        .setStyle(Style.EMPTY.withColor(Formatting.GREEN));
-                    client.player.sendMessage(message, true);
+                    Component message = Component.literal("Widget position reset!")
+                        .setStyle(Style.EMPTY.withColor(ChatFormatting.GREEN));
+                    client.player.displayClientMessage(message, true);
                 }
             }
         )
-        .dimensions(width / 2 + spacing/2, y, buttonWidth, buttonHeight)
+        .bounds(width / 2 + spacing/2, y, buttonWidth, buttonHeight)
         .build();
-        addDrawableChild(resetButton);
+        addRenderableWidget(resetButton);
     }
 
     private void switchTab(Tab newTab) {
         currentTab = newTab;
-        clearChildren();
+        clearWidgets();
         init();
     }
 
@@ -203,7 +204,7 @@ public class WidgetCustomizationMenu extends Screen {
     }
 
     @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
         
     }
 
@@ -233,34 +234,35 @@ public class WidgetCustomizationMenu extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        Text mainHeading = Text.literal("Skyblock Resource Calculator Widget")
-            .setStyle(Style.EMPTY.withColor(Formatting.GOLD).withBold(true));
-        context.drawCenteredTextWithShadow(textRenderer, mainHeading, width / 2, 6, 0xFFFFB728);
-        
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         if (currentTab == Tab.RECIPE_SELECTION) {
             renderRecipeTab(context, mouseX, mouseY);
         } else {
             renderPositioningTab(context, mouseX, mouseY);
         }
+        int activeTabX = currentTab == Tab.RECIPE_SELECTION ? 20 : 180;
+        context.fill(activeTabX, 42, activeTabX + 150, 44, 0xFF5FAF3F);
         super.render(context, mouseX, mouseY, delta);
     }
 
-    private void renderRecipeTab(DrawContext context, int mouseX, int mouseY) {
-        context.fill(0, 0, width, height, 0xFC101010); 
+    private void renderRecipeTab(GuiGraphics context, int mouseX, int mouseY) {
+        context.fill(0, 0, width, height, 0xFF0E0E0E);
+        drawBorder(context, 0, 0, width, height, 0x88608C35);
 
-        int borderColor = 0x88608C35;
-        context.drawBorder(0, 0, width, height, borderColor);
+        context.fill(0, 0, width, 22, 0xFF17293A);
+        drawBorder(context, 0, 0, width, 22, 0xFF223344);
+        String modTitle = "Widget Customization";
+        context.drawString(font, modTitle, width / 2 - font.width(modTitle) / 2, 7, GOLD, false);
 
-        Text recipeSelectionTitle = Text.literal("Recipe Selection")
-            .setStyle(Style.EMPTY.withColor(Formatting.GOLD).withBold(true));
-        context.drawTextWithShadow(textRenderer, recipeSelectionTitle, 20, 45, 0xE0E0E0);
-        
-        Text treeTitle = Text.literal("Recipe Tree Preview (" + craftAmount + "×)")
-            .setStyle(Style.EMPTY.withColor(Formatting.GOLD).withBold(true));
-        context.drawTextWithShadow(textRenderer, treeTitle, treeViewX, treeViewY - 15, 0xE0E0E0);
+        context.fill(0, 22, width, 44, 0xFF131313);
 
-        context.drawTextWithShadow(textRenderer, Text.literal("Craft Amount:"), 236, 45, 0xE0E0E0);
+        context.drawString(font,
+            Component.literal("Recipe Selection").setStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true)),
+            20, 47, GOLD, false);
+        context.drawString(font,
+            Component.literal("Recipe Tree Preview (" + craftAmount + "×)").setStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true)),
+            treeViewX, treeViewY - 15, GOLD, false);
+        context.drawString(font, "Craft:", 236, 57, 0xFFCCCCCC, false);
         int yPos = 85; 
         int itemHeight = 20;
         int endIndex = Math.min(scrollOffset + MAX_RECIPES_SHOWN, filteredRecipes.size());
@@ -269,8 +271,9 @@ public class WidgetCustomizationMenu extends Screen {
 
         int listBorderColor = 0xFFDAA520;
         for (int i = 0; i < 2; i++) { 
-            context.drawBorder(
-                20 - i, 
+            drawBorder(
+                context,
+                20 - i,
                 yPos - 5 - i, 
                 250 + i * 2, 
                 MAX_RECIPES_SHOWN * itemHeight + 20 + i * 2, 
@@ -278,28 +281,30 @@ public class WidgetCustomizationMenu extends Screen {
             );
         }
         if (filteredRecipes.isEmpty()) {
-            context.drawTextWithShadow(textRenderer, Text.literal("No recipes found"), 30, yPos + 10, 0xAAAAAA);
+            context.drawString(font, "No recipes found", 30, yPos + 10, 0xFFAAAAAA, false);
         } else {
             for (int i = scrollOffset; i < endIndex; i++) {
                 String recipe = filteredRecipes.get(i);
                 boolean isSelected = recipe.equals(selectedRecipe);
                 if (isSelected) {
                     context.fill(20, yPos, 270, yPos + itemHeight, 0x99608C35);
-                    context.drawText(textRenderer, Text.literal(recipe), 30, yPos + 5, 0xFFFFB728, false);
+                    context.drawString(font, recipe, 30, yPos + 5, 0xFFFFB728, false);
                 } else {
                     boolean isHovered = mouseX >= 20 && mouseX <= 270 && mouseY >= yPos && mouseY <= yPos + itemHeight;
                     if (isHovered) {
                         context.fill(20, yPos, 270, yPos + itemHeight, 0x553E6428);
                     }
-                    context.drawTextWithShadow(textRenderer, Text.literal(recipe), 30, yPos + 5, 0xFFFFFF);
+                    context.drawString(font, recipe, 30, yPos + 5, 0xFFE0E0E0, false);
                 }
                 yPos += itemHeight;
             }
             if (scrollOffset > 0) {
-                context.drawCenteredTextWithShadow(textRenderer, Text.literal("▲"), 145, 75, GOLD);
+                String up = "▲";
+                context.drawString(font, up, 145 - font.width(up) / 2, 75, GOLD, false);
             }
             if (endIndex < filteredRecipes.size()) {
-                context.drawCenteredTextWithShadow(textRenderer, Text.literal("▼"), 145, yPos + 5, GOLD);
+                String down = "▼";
+                context.drawString(font, down, 145 - font.width(down) / 2, yPos + 5, GOLD, false);
             }
         }
 
@@ -308,8 +313,9 @@ public class WidgetCustomizationMenu extends Screen {
         int treeBorderColor = 0xFFDAA520;
         int borderThickness = 2;
         for (int i = 0; i < borderThickness; i++) {
-            context.drawBorder(
-                treeViewX - i, 
+            drawBorder(
+                context,
+                treeViewX - i,
                 treeViewY - i, 
                 treeViewWidth + i * 2, 
                 treeViewHeight + i * 2, 
@@ -328,18 +334,12 @@ public class WidgetCustomizationMenu extends Screen {
             int totalHeight = getExpandedNodeHeight(recipeTree, selectedRecipe);
             if (totalHeight > treeViewHeight) {
                 if (treeScrollOffset > 0) {
-                    context.drawCenteredTextWithShadow(textRenderer, 
-                        Text.literal("▲"), 
-                        treeViewX + treeViewWidth - 15, 
-                        treeViewY + 15, 
-                        GOLD);
+                    String up = "▲";
+                    context.drawString(font, up, treeViewX + treeViewWidth - 15 - font.width(up) / 2, treeViewY + 15, GOLD, false);
                 }
                 if (treeScrollOffset < totalHeight - treeViewHeight + 20) {
-                    context.drawCenteredTextWithShadow(textRenderer, 
-                        Text.literal("▼"), 
-                        treeViewX + treeViewWidth - 15, 
-                        treeViewY + treeViewHeight - 15, 
-                        GOLD);
+                    String down = "▼";
+                    context.drawString(font, down, treeViewX + treeViewWidth - 15 - font.width(down) / 2, treeViewY + treeViewHeight - 15, GOLD, false);
                 }
                 int scrollbarWidth = 12;
                 int scrollbarHeight = Math.max(40, treeViewHeight * treeViewHeight / totalHeight);
@@ -348,37 +348,33 @@ public class WidgetCustomizationMenu extends Screen {
                 context.fill(treeViewX + treeViewWidth - scrollbarWidth - 4, scrollbarY, treeViewX + treeViewWidth - 4, scrollbarY + scrollbarHeight, 0xFFDAA520);
             }
         } else if (selectedRecipe != null) {
-            context.drawTextWithShadow(textRenderer, 
-                Text.literal("Loading recipe tree..."), 
-                treeViewX + 20, 
-                treeViewY + 20, 
-                0xAAAAAA);
+            context.drawString(font, "Loading recipe tree...", treeViewX + 20, treeViewY + 20, 0xFFAAAAAA, false);
         } else {
-            context.drawTextWithShadow(textRenderer, 
-                Text.literal("Select a recipe to preview its tree"), 
-                treeViewX + 20, 
-                treeViewY + 20, 
-                0xAAAAAA);
+            context.drawString(font, "Select a recipe to preview", treeViewX + 20, treeViewY + 20, 0xFFAAAAAA, false);
         }
         context.disableScissor();
     }
 
-    private void renderPositioningTab(DrawContext context, int mouseX, int mouseY) {
-        context.drawCenteredTextWithShadow(textRenderer, 
-            Text.literal("Widget Positioning"), 
-            width / 2, 
-            30, 
-            0xE0E0E0);
-        context.drawCenteredTextWithShadow(textRenderer, 
-            Text.literal("◆ Click and drag the widget preview to position it ◆"), 
-            width / 2, 
-            55, 
-            GOLD);
-        context.drawCenteredTextWithShadow(textRenderer, 
-            Text.literal("Current Position: X=" + widgetPositionX + ", Y=" + widgetPositionY), 
-            width / 2, 
-            75, 
-            0xFFFFFF);
+    private void renderPositioningTab(GuiGraphics context, int mouseX, int mouseY) {
+        context.fill(0, 0, width, height, 0xFF0E0E0E);
+        drawBorder(context, 0, 0, width, height, 0x88608C35);
+
+        context.fill(0, 0, width, 22, 0xFF17293A);
+        drawBorder(context, 0, 0, width, 22, 0xFF223344);
+        String modTitle = "Widget Customization";
+        context.drawString(font, modTitle, width / 2 - font.width(modTitle) / 2, 7, GOLD, false);
+
+        context.fill(0, 22, width, 44, 0xFF131313);
+
+        String posTitle = "Widget Positioning";
+        context.drawString(font, posTitle, width / 2 - font.width(posTitle) / 2, 52, 0xFFE0E0E0, false);
+
+        String hint = "Drag the widget preview to reposition   |   Drag corner handles to resize";
+        context.drawString(font, hint, width / 2 - font.width(hint) / 2, 65, 0xFFBBBBBB, false);
+
+        String posInfo = "X=" + widgetPositionX + "  Y=" + widgetPositionY
+            + "  W=" + getPreviewWidth() + "  H=" + getPreviewHeight();
+        context.drawString(font, posInfo, width / 2 - font.width(posInfo) / 2, 78, GOLD, false);
     int previewWidth = getPreviewWidth();
     int previewHeight = getPreviewHeight();
         for (int x = 0; x < width; x += 50) {
@@ -392,8 +388,9 @@ public class WidgetCustomizationMenu extends Screen {
         int borderColor = isDraggingWidget ? 0xFFFFDD00 : 0xFFDAA520;
         int borderThickness = 2;
         for (int i = 0; i < borderThickness; i++) {
-            context.drawBorder(
-                widgetPositionX - i, 
+            drawBorder(
+                context,
+                widgetPositionX - i,
                 widgetPositionY - i, 
                 previewWidth + i * 2, 
                 previewHeight + i * 2, 
@@ -402,7 +399,7 @@ public class WidgetCustomizationMenu extends Screen {
         }
         String dragIcon = isDraggingWidget ? "✦" : "✥";
         drawFittedTextWithShadow(context,
-            Text.literal("Recipe Widget " + dragIcon),
+            Component.literal("Recipe Widget " + dragIcon),
             widgetPositionX + 10,
             widgetPositionY + 6,
             GOLD,
@@ -410,7 +407,7 @@ public class WidgetCustomizationMenu extends Screen {
         );
     if (selectedRecipe != null) {
             drawFittedTextWithShadow(context,
-                Text.literal("Recipe: " + selectedRecipe),
+                Component.literal("Recipe: " + selectedRecipe),
                 widgetPositionX + 10,
                 widgetPositionY + 30,
                 GOLD,
@@ -443,25 +440,19 @@ public class WidgetCustomizationMenu extends Screen {
             }
         } else {
             drawFittedTextWithShadow(context,
-                Text.literal("No recipe selected"),
+                Component.literal("No recipe selected"),
                 widgetPositionX + 10,
                 widgetPositionY + 60,
-                0xFFFFFF,
+                0xFFFFFFFF,
                 Math.max(10, previewWidth - 20)
             );
         }
         if (isDraggingWidget || resizing) {
-            context.drawCenteredTextWithShadow(textRenderer, 
-                Text.literal(resizing ? "Release to resize" : "Release to place widget"), 
-                widgetPositionX + previewWidth / 2, 
-                widgetPositionY + previewHeight - 15, 
-                0xFFAAAAFF);
+            String hint2 = resizing ? "Release to resize" : "Release to place widget";
+            context.drawString(font, hint2, widgetPositionX + previewWidth / 2 - font.width(hint2) / 2, widgetPositionY + previewHeight - 15, 0xFFAAAAFF, false);
         } else {
-            context.drawCenteredTextWithShadow(textRenderer, 
-                Text.literal("⇦ Drag to reposition ⇨"), 
-                widgetPositionX + previewWidth / 2, 
-                widgetPositionY + previewHeight - 15, 
-                0xFFAAAAAA);
+            String hint2 = "Drag to reposition";
+            context.drawString(font, hint2, widgetPositionX + previewWidth / 2 - font.width(hint2) / 2, widgetPositionY + previewHeight - 15, 0xFF888888, false);
         }
 
     drawHandle(context, widgetPositionX - RESIZE_HANDLE_SIZE/2, widgetPositionY - RESIZE_HANDLE_SIZE/2);
@@ -472,7 +463,7 @@ public class WidgetCustomizationMenu extends Screen {
 
     
 
-    private int renderStaticWidgetStyleTreeScaled(DrawContext context, RecipeManager.RecipeNode node, int x, int y, int level, int availableWidth, String pathKey, int lineHeight, int indentUnit) {
+    private int renderStaticWidgetStyleTreeScaled(GuiGraphics context, RecipeManager.RecipeNode node, int x, int y, int level, int availableWidth, String pathKey, int lineHeight, int indentUnit) {
         if (node == null) return y;
         int indent = level * indentUnit;
         boolean hasChildren = node.ingredients != null && !node.ingredients.isEmpty();
@@ -482,13 +473,13 @@ public class WidgetCustomizationMenu extends Screen {
         int bgColor = 0x99271910;
         context.fill(x + indent, y, x + indent + nodeWidth, y + lineHeight, bgColor);
         int borderColor = hasEnough ? 0x88608C35 : 0x88FF5555;
-        context.drawBorder(x + indent, y, nodeWidth, lineHeight, borderColor);
+        drawBorder(context, x + indent, y, nodeWidth, lineHeight, borderColor);
 
         String nextKey = SandboxWidget.makePathKey(pathKey, node.name);
         boolean isExpanded = widget.isNodeExpanded(nextKey);
         if (hasChildren) {
-            context.drawText(
-                textRenderer,
+            context.drawString(
+                font,
                 isExpanded ? "▼" : "▶",
                 x + indent + Math.max(3, Math.round(5 * (lineHeight / 16.0f))),
                 y + Math.max(1, Math.round(4 * (lineHeight / 16.0f))),
@@ -503,20 +494,20 @@ public class WidgetCustomizationMenu extends Screen {
 
         String amountText = node.amount + "× ";
         int amountColor = hasEnough ? 0xFF6EFF6E : 0xFFFF6B6B;
-        int amountWidth = textRenderer.getWidth(amountText);
-        Text itemName = Text.literal(node.name).setStyle(Style.EMPTY.withColor(textColor).withBold(isBold));
-        int itemWidth = textRenderer.getWidth(itemName);
+        int amountWidth = font.width(amountText);
+        Component itemName = Component.literal(node.name).setStyle(Style.EMPTY.withColor(textColor).withBold(isBold));
+        int itemWidth = font.width(itemName);
         int totalWidth = amountWidth + itemWidth;
         int maxTextWidth = Math.max(10, nodeWidth - (hasChildren ? Math.max(14, Math.round(25 * (lineHeight / 16.0f))) : Math.max(6, Math.round(10 * (lineHeight / 16.0f)))));
         int adjustedMax = (int)Math.floor(maxTextWidth / Math.max(0.01f, (lineHeight / 16.0f)));
         float textScaleLocal = totalWidth > adjustedMax ? (float)adjustedMax / (float)totalWidth : 1.0f;
         float textScale = Math.min(1.0f, textScaleLocal) * (lineHeight / 16.0f);
-        context.getMatrices().push();
-        context.getMatrices().translate(nameX, y + Math.max(1, Math.round(4 * (lineHeight / 16.0f))), 0);
-        context.getMatrices().scale(textScale, textScale, 1);
-        context.drawText(textRenderer, Text.literal(amountText), 0, 0, amountColor, false);
-        context.drawText(textRenderer, itemName, amountWidth, 0, 0xFFFFFFFF, false);
-        context.getMatrices().pop();
+        context.pose().pushMatrix();
+        context.pose().translate(nameX, y + Math.max(1, Math.round(4 * (lineHeight / 16.0f))));
+        context.pose().scale(textScale, textScale);
+        context.drawString(font, Component.literal(amountText), 0, 0, amountColor, false);
+        context.drawString(font, itemName, amountWidth, 0, 0xFFFFFFFF, false);
+        context.pose().popMatrix();
 
         y += lineHeight;
 
@@ -536,12 +527,12 @@ public class WidgetCustomizationMenu extends Screen {
         return y;
     }
 
-    private void drawCraftablePreview(DrawContext context, int x, int y, int width, int maxY) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void drawCraftablePreview(GuiGraphics context, int x, int y, int width, int maxY) {
+        Minecraft client = Minecraft.getInstance();
         List<String> msgs = SandboxWidget.getInstance().getMessagesSnapshot();
         if (msgs == null || msgs.isEmpty()) {
-            Text header = Text.literal("Craftable -").setStyle(Style.EMPTY.withColor(Formatting.YELLOW).withBold(true));
-            if (y + 10 <= maxY) context.drawText(client.textRenderer, header, x + 5, y, 0xFFFFFFFF, false);
+            Component header = Component.literal("Craftable -").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW).withBold(true));
+            if (y + 10 <= maxY) context.drawString(client.font, header, x + 5, y, 0xFFFFFFFF, false);
             return;
         }
         int baseHeader = 13;
@@ -555,12 +546,12 @@ public class WidgetCustomizationMenu extends Screen {
         float scale = desiredHeight > 0 ? Math.min(1.0f, Math.max(0.4f, (float)availableHeight / (float)desiredHeight)) : 1.0f;
 
         if (y + Math.round(baseLine * scale) <= maxY) {
-            Text header = Text.literal("Craftable -").setStyle(Style.EMPTY.withColor(Formatting.YELLOW).withBold(true));
-            context.getMatrices().push();
-            context.getMatrices().translate(x + 5, y, 0);
-            context.getMatrices().scale(scale, scale, 1);
-            context.drawText(client.textRenderer, header, 0, 0, 0xFFFFFFFF, false);
-            context.getMatrices().pop();
+            Component header = Component.literal("Craftable -").setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW).withBold(true));
+            context.pose().pushMatrix();
+            context.pose().translate(x + 5, y);
+            context.pose().scale(scale, scale);
+            context.drawString(client.font, header, 0, 0, 0xFFFFFFFF, false);
+            context.pose().popMatrix();
         } else {
             return;
         }
@@ -584,13 +575,13 @@ public class WidgetCustomizationMenu extends Screen {
             String[] words = message.split(" ");
             StringBuilder line = new StringBuilder();
             for (String word : words) {
-                if (client.textRenderer.getWidth(line.toString() + word) > unscaledWrapWidth) {
+                if (client.font.width(line.toString() + word) > unscaledWrapWidth) {
                     if (y + Math.round(baseLine * scale) > maxY) return;
-                    context.getMatrices().push();
-                    context.getMatrices().translate(x + 5, y, 0);
-                    context.getMatrices().scale(scale, scale, 1);
-                    context.drawText(client.textRenderer, line.toString(), 0, 0, textColor, false);
-                    context.getMatrices().pop();
+                    context.pose().pushMatrix();
+                    context.pose().translate(x + 5, y);
+                    context.pose().scale(scale, scale);
+                    context.drawString(client.font, line.toString(), 0, 0, textColor, false);
+                    context.pose().popMatrix();
                     y += Math.round(baseLine * scale);
                     line = new StringBuilder(message.startsWith("   ") ? "      " : "   ").append(word).append(" ");
                 } else {
@@ -599,11 +590,11 @@ public class WidgetCustomizationMenu extends Screen {
             }
             if (line.length() > 0) {
                 if (y + Math.round((baseLine - 1) * scale) > maxY) return;
-                context.getMatrices().push();
-                context.getMatrices().translate(x + 5, y, 0);
-                context.getMatrices().scale(scale, scale, 1);
-                context.drawText(client.textRenderer, line.toString(), 0, 0, textColor, false);
-                context.getMatrices().pop();
+                context.pose().pushMatrix();
+                context.pose().translate(x + 5, y);
+                context.pose().scale(scale, scale);
+                context.drawString(client.font, line.toString(), 0, 0, textColor, false);
+                context.pose().popMatrix();
                 y += Math.round((baseLine - 1) * scale);
             }
         }
@@ -634,19 +625,19 @@ public class WidgetCustomizationMenu extends Screen {
         return max;
     }
 
-    private void drawHandle(DrawContext context, int x, int y) {
+    private void drawHandle(GuiGraphics context, int x, int y) {
         context.fill(x, y, x + RESIZE_HANDLE_SIZE, y + RESIZE_HANDLE_SIZE, 0xFFFFB728);
     }
 
-    private void drawFittedTextWithShadow(DrawContext context, Text text, int x, int y, int color, int maxWidth) {
-        int width = textRenderer.getWidth(text);
+    private void drawFittedTextWithShadow(GuiGraphics context, Component text, int x, int y, int color, int maxWidth) {
+        int width = font.width(text);
         float scale = width > maxWidth ? (float)maxWidth / (float)width : 1.0f;
         scale = Math.min(scale, getMaxTextScale());
-        context.getMatrices().push();
-        context.getMatrices().translate(x, y, 0);
-        context.getMatrices().scale(scale, scale, 1);
-        context.drawTextWithShadow(textRenderer, text, 0, 0, color);
-        context.getMatrices().pop();
+        context.pose().pushMatrix();
+        context.pose().translate(x, y);
+        context.pose().scale(scale, scale);
+        context.drawString(font, text, 0, 0, color);
+        context.pose().popMatrix();
     }
 
     private float getMaxTextScale() {
@@ -655,9 +646,9 @@ public class WidgetCustomizationMenu extends Screen {
 
     
 
-    private int renderRecipeTree(DrawContext context, RecipeManager.RecipeNode node, int x, int y, int level, String pathKey) {
+    private int renderRecipeTree(GuiGraphics context, RecipeManager.RecipeNode node, int x, int y, int level, String pathKey) {
         if (node == null) return y;
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         int indent = level * RECIPE_LEVEL_INDENT;
         boolean hasEnough = (node.amount == 0);
         String nodeKey = SandboxWidget.makePathKey(pathKey, node.name);
@@ -665,8 +656,8 @@ public class WidgetCustomizationMenu extends Screen {
         boolean hasChildren = node.ingredients != null && !node.ingredients.isEmpty();
         int bgColor = 0x99271910;
         
-        int mouseX = (int)(client.mouse.getX() / client.getWindow().getScaleFactor());
-        int mouseY = (int)(client.mouse.getY() / client.getWindow().getScaleFactor());
+        int mouseX = (int)(client.mouseHandler.xpos() / client.getWindow().getGuiScale());
+        int mouseY = (int)(client.mouseHandler.ypos() / client.getWindow().getGuiScale());
         boolean isHovered = mouseX >= x + indent && mouseX <= x + indent + (treeViewWidth - 20 - indent) && 
                            mouseY >= y && mouseY <= y + 16;
         int hoverEffect = isHovered ? 0x22FFFFFF : 0;
@@ -675,12 +666,12 @@ public class WidgetCustomizationMenu extends Screen {
         context.fill(x + indent, y, x + indent + nodeWidth, y + 16, bgColor + hoverEffect);
         
         int borderColor = hasEnough ? 0x88608C35 : 0x88FF5555;
-        context.drawBorder(x + indent, y, nodeWidth, 16, borderColor);
-        
+        drawBorder(context, x + indent, y, nodeWidth, 16, borderColor);
+
         if (hasChildren) {
             String expandIcon = isExpanded ? "▼" : "▶";
-            context.drawText(
-                client.textRenderer,
+            context.drawString(
+                client.font,
                 expandIcon,
                 x + indent + 5,
                 y + 4,
@@ -703,8 +694,8 @@ public class WidgetCustomizationMenu extends Screen {
         String amountText = node.amount + "×";
         int amountColor = hasEnough ? 0xFF6EFF6E : 0xFFFF6B6B;
         
-        context.drawText(
-            client.textRenderer,
+        context.drawString(
+            client.font,
             prefix,
             nameX,
             y + 4,
@@ -712,23 +703,23 @@ public class WidgetCustomizationMenu extends Screen {
             false
         );
         
-        context.drawText(
-            client.textRenderer,
+        context.drawString(
+            client.font,
             amountText,
-            nameX + client.textRenderer.getWidth(prefix),
+            nameX + client.font.width(prefix),
             y + 4,
             amountColor,
             false
         );
         
-        Text itemName = Text.literal(node.name)
+        Component itemName = Component.literal(node.name)
             .setStyle(Style.EMPTY.withColor(textColor)
             .withBold(isBold));
         
-        context.drawText(
-            client.textRenderer,
+        context.drawString(
+            client.font,
             itemName,
-            nameX + client.textRenderer.getWidth(prefix + amountText + " "),
+            nameX + client.font.width(prefix + amountText + " "),
             y + 4,
             0xFFFFFFFF,
             false
@@ -781,7 +772,10 @@ public class WidgetCustomizationMenu extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent ctx, boolean doubleClick) {
+        double mouseX = ctx.x();
+        double mouseY = ctx.y();
+        int button = ctx.button();
         if (currentTab == Tab.POSITIONING) {
             int previewWidth = getPreviewWidth();
             int previewHeight = getPreviewHeight();
@@ -804,15 +798,9 @@ public class WidgetCustomizationMenu extends Screen {
                 dragOffsetY = (int) mouseY - widgetPositionY;
                 return true;
             }
-            if (super.mouseClicked(mouseX, mouseY, button)) {
-                return true;
-            }
-            return false;
+            return super.mouseClicked(ctx, doubleClick);
         }
         if (currentTab == Tab.RECIPE_SELECTION) {
-            if (super.mouseClicked(mouseX, mouseY, button)) {
-                return true;
-            }
             if (mouseX >= 20 && mouseX <= 270 && mouseY >= 80 && mouseY <= 85 + MAX_RECIPES_SHOWN * 20) {
                 int recipeIndex = (int) ((mouseY - 80) / 20);
                 int actualIndex = scrollOffset + recipeIndex;
@@ -831,11 +819,13 @@ public class WidgetCustomizationMenu extends Screen {
                 return handleTreeNodeClick(mouseX, mouseY);
             }
         }
-    return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(ctx, doubleClick);
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent ctx, double deltaX, double deltaY) {
+        double mouseX = ctx.x();
+        double mouseY = ctx.y();
         if (currentTab == Tab.POSITIONING) {
             if (isDraggingWidget) {
                 widgetPositionX = (int) mouseX - dragOffsetX;
@@ -908,11 +898,11 @@ public class WidgetCustomizationMenu extends Screen {
                 return true;
             }
         }
-        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+        return super.mouseDragged(ctx, deltaX, deltaY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(MouseButtonEvent ctx) {
         if (currentTab == Tab.POSITIONING) {
             if (isDraggingWidget || resizing) {
                 isDraggingWidget = false;
@@ -928,7 +918,7 @@ public class WidgetCustomizationMenu extends Screen {
                 return true;
             }
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(ctx);
     }
 
     private int getPreviewWidth() {
@@ -991,14 +981,14 @@ public class WidgetCustomizationMenu extends Screen {
                     return true;
                 }
                 else {
-                    MinecraftClient client = MinecraftClient.getInstance();
+                    Minecraft client = Minecraft.getInstance();
                     Map<String, Integer> resources = ResourcesManager.getInstance().getAllResources();
                     int available = resources.getOrDefault(node.name, 0);
                     boolean hasEnough = available >= node.amount;
-                    Text message = Text.literal("You have " + available + "/" + node.amount + " of " + node.name)
-                        .setStyle(Style.EMPTY.withColor(hasEnough ? Formatting.GREEN : Formatting.RED));
+                    Component message = Component.literal("You have " + available + "/" + node.amount + " of " + node.name)
+                        .setStyle(Style.EMPTY.withColor(hasEnough ? ChatFormatting.GREEN : ChatFormatting.RED));
                     if (client.player != null) {
-                        client.player.sendMessage(message, true);
+                        client.player.displayClientMessage(message, true);
                     }
                     return true;
                 }
@@ -1037,26 +1027,26 @@ public class WidgetCustomizationMenu extends Screen {
         }
         widget.setWidgetPosition(widgetPositionX, widgetPositionY);
         
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player != null) {
-            Text message = Text.literal("Widget configuration applied!")
-                .setStyle(Style.EMPTY.withColor(Formatting.GREEN));
-            client.player.sendMessage(message, true);
+            Component message = Component.literal("Widget configuration applied!")
+                .setStyle(Style.EMPTY.withColor(ChatFormatting.GREEN));
+            client.player.displayClientMessage(message, true);
         }
     }
 
     private void saveWidgetConfiguration() {
         widget.saveConfiguration();
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player != null) {
-            Text message = Text.literal("Widget configuration saved!")
-                .setStyle(Style.EMPTY.withColor(Formatting.GREEN));
-            client.player.sendMessage(message, true);
+            Component message = Component.literal("Widget configuration saved!")
+                .setStyle(Style.EMPTY.withColor(ChatFormatting.GREEN));
+            client.player.displayClientMessage(message, true);
         }
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         if (widget.getWidgetX() != widgetPositionX || widget.getWidgetY() != widgetPositionY) {
             widget.setWidgetPosition(widgetPositionX, widgetPositionY);
         }
@@ -1064,7 +1054,7 @@ public class WidgetCustomizationMenu extends Screen {
             widget.setCraftAmount(craftAmount);
         }
         widget.saveConfiguration();
-        super.close();
+        super.onClose();
     }
 
     private RecipeManager.RecipeNode convertResourceNodeToRecipeNode(ResourcesManager.RecipeNode resourceNode) {
@@ -1076,5 +1066,13 @@ public class WidgetCustomizationMenu extends Screen {
             }
         }
         return new RecipeManager.RecipeNode(resourceNode.name, resourceNode.amount, ingredients);
+    }
+
+    // Helper method to draw borders since drawBorder was removed from the rendering API in 1.21.10
+    private static void drawBorder(GuiGraphics context, int x, int y, int width, int height, int color) {
+        context.fill(x, y, x + width, y + 1, color);
+        context.fill(x, y + height - 1, x + width, y + height, color);
+        context.fill(x, y, x + 1, y + height, color);
+        context.fill(x + width - 1, y, x + width, y + height, color);
     }
 }

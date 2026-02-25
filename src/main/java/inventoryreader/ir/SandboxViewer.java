@@ -1,16 +1,18 @@
 package inventoryreader.ir;
 
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.text.Text;
-import net.minecraft.text.Style;
-import net.minecraft.util.Formatting;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.*;
 import java.util.stream.Collectors;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 
 public class SandboxViewer extends Screen {
 
@@ -54,9 +56,9 @@ public class SandboxViewer extends Screen {
     private boolean craftable = false;
     private final List<String> messages = new ArrayList<>();
 
-    private TextFieldWidget searchBox;
-    private TextFieldWidget amountField;
-    private final Map<String, TextFieldWidget> resourceAmountFields = new HashMap<>();
+    private EditBox searchBox;
+    private EditBox amountField;
+    private final Map<String, EditBox> resourceAmountFields = new HashMap<>();
     private String activeTextField = null;
     private int scrollOffset = 0;
 
@@ -65,12 +67,10 @@ public class SandboxViewer extends Screen {
     private record ClickableElement(int x, int y, int width, int height, Runnable action) {}
     private final List<ClickableElement> clickableElements = new ArrayList<>();
 
-    // Unified scroll state for Recipe Viewer
     private int recipeCombinedScrollOffset = 0;
     private int recipeCombinedMaxScroll = 0;
     private int recipeCombinedAreaX = 0, recipeCombinedAreaY = 0, recipeCombinedAreaWidth = 0, recipeCombinedAreaHeight = 0;
 
-    // Unified scroll state for Forge Mode
     private int forgeCombinedScrollOffset = 0;
     private int forgeCombinedMaxScroll = 0;
     private int forgeCombinedAreaX = 0, forgeCombinedAreaY = 0, forgeCombinedAreaWidth = 0, forgeCombinedAreaHeight = 0;
@@ -79,14 +79,39 @@ public class SandboxViewer extends Screen {
     private List<ResourcesManager.ResourceEntry> selectedResources = new ArrayList<>();
 
     public SandboxViewer() {
-        super(Text.literal("Hypixel Forge"));
+        super(Component.literal("Hypixel Forge"));
     }
 
     @Override
     protected void init() {
-        this.clearChildren();
+        this.clearWidgets();
         int centerX = this.width / 2;
         int buttonHeight = 20;
+
+        int tabWidth = 110;
+        int tabHeight = 20;
+        int startX = 20;
+        int tabY = 32;
+
+        this.addRenderableWidget(Button.builder(Component.literal("Resources"), button -> {
+            mode = Mode.RESOURCE_VIEWER;
+            this.init();
+        }).bounds(startX, tabY, tabWidth, tabHeight).build());
+
+        this.addRenderableWidget(Button.builder(Component.literal("Recipes"), button -> {
+            mode = Mode.RECIPE_VIEWER;
+            this.init();
+        }).bounds(startX + tabWidth, tabY, tabWidth, tabHeight).build());
+
+        this.addRenderableWidget(Button.builder(Component.literal("Forge Mode"), button -> {
+            mode = Mode.FORGE_MODE;
+            this.init();
+        }).bounds(startX + 2 * tabWidth, tabY, tabWidth, tabHeight).build());
+
+        this.addRenderableWidget(Button.builder(Component.literal("Modify"), button -> {
+            mode = Mode.MODIFY_RESOURCES;
+            this.init();
+        }).bounds(startX + 3 * tabWidth, tabY, tabWidth, tabHeight).build());
 
         switch (mode) {
             case RESOURCE_VIEWER -> initResourceViewer(buttonHeight);
@@ -97,25 +122,25 @@ public class SandboxViewer extends Screen {
     }
 
     @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {}
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {}
 
     private void initResourceViewer(int buttonHeight) {
-        searchBox = new TextFieldWidget(this.textRenderer, 30, 45, 210, buttonHeight, Text.literal("Search Resources"));
-        searchBox.setPlaceholder(Text.literal("Search resources..."));
-        searchBox.setChangedListener(this::onResourceSearchChanged);
-        this.addDrawableChild(searchBox);
+        searchBox = new EditBox(this.font, 30, 56, 210, 18, Component.literal("Search Resources"));
+        searchBox.setHint(Component.literal("Search resources..."));
+        searchBox.setResponder(this::onResourceSearchChanged);
+        this.addRenderableWidget(searchBox);
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("🔄 Refresh"), button -> loadResources())
-            .dimensions(this.width - 120, 45, 90, buttonHeight).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Refresh"), button -> loadResources())
+            .bounds(this.width - 100, 56, 80, 18).build());
 
         loadResources();
     }
 
     private void initRecipeViewer(int centerX, int buttonHeight) {
-        searchBox = new TextFieldWidget(this.textRenderer, 30, 45, 210, buttonHeight, Text.literal(""));
-        searchBox.setPlaceholder(Text.literal("Search recipes..."));
-        searchBox.setChangedListener(this::onRecipeSearchChanged);
-        this.addDrawableChild(searchBox);
+        searchBox = new EditBox(this.font, 30, 56, 210, 18, Component.literal(""));
+        searchBox.setHint(Component.literal("Search recipes..."));
+        searchBox.setResponder(this::onRecipeSearchChanged);
+        this.addRenderableWidget(searchBox);
 
         loadRecipes();
     }
@@ -123,45 +148,41 @@ public class SandboxViewer extends Screen {
     private void initForgeMode(int centerX, int buttonHeight) {
         loadResources();
         loadRecipes();
-        
-        searchBox = new TextFieldWidget(this.textRenderer, 30, 45, 190, buttonHeight, Text.literal(""));
-        searchBox.setPlaceholder(Text.literal("Search recipes..."));
-        searchBox.setChangedListener(this::onRecipeSearchChanged);
-        this.addDrawableChild(searchBox);
 
-        this.addDrawableChild(ButtonWidget.builder(
-            Text.literal(SandboxWidget.getInstance().isEnabled() ? "❌ Disable HUD Overlay" : "✓ Enable HUD Overlay"), 
+        searchBox = new EditBox(this.font, 30, 56, 180, 18, Component.literal(""));
+        searchBox.setHint(Component.literal("Search recipes..."));
+        searchBox.setResponder(this::onRecipeSearchChanged);
+        this.addRenderableWidget(searchBox);
+
+        amountField = new EditBox(this.font, 215, 56, 35, 18, Component.literal("1"));
+        amountField.setValue(String.valueOf(craftAmount));
+        amountField.setResponder(this::onAmountChanged);
+        this.addRenderableWidget(amountField);
+
+        this.addRenderableWidget(Button.builder(
+            Component.literal(SandboxWidget.getInstance().isEnabled() ? "Disable HUD" : "Enable HUD"),
             button -> {
                 boolean isCurrentlyEnabled = SandboxWidget.getInstance().isEnabled();
                 SandboxWidget.getInstance().setEnabled(!isCurrentlyEnabled);
                 if (!isCurrentlyEnabled && selectedRecipe != null) {
                     SandboxWidget.getInstance().setSelectedRecipe(selectedRecipe);
                 }
-                button.setMessage(Text.literal(SandboxWidget.getInstance().isEnabled() ? "❌ Disable HUD Overlay" : "✓ Enable HUD Overlay"));
+                button.setMessage(Component.literal(SandboxWidget.getInstance().isEnabled() ? "Disable HUD" : "Enable HUD"));
             }
-        ).dimensions(this.width - 430, 45, 150, buttonHeight).build());
-
-
-        if (selectedRecipe != null) {
-            amountField = new TextFieldWidget(this.textRenderer, 221, 45, 19, buttonHeight, Text.literal("1"));
-            amountField.setText(String.valueOf(craftAmount));
-            amountField.setChangedListener(this::onAmountChanged);
-            this.addDrawableChild(amountField);
-
-        }
+        ).bounds(this.width - 110, 56, 100, 18).build());
     }
 
     private void initModifyResources(int buttonHeight) {
         resourceAmountFields.clear();
         activeTextField = null;
-        
-        searchBox = new TextFieldWidget(this.textRenderer, 30, 45, 210, buttonHeight, Text.literal("Search Resources"));
-        searchBox.setPlaceholder(Text.literal("Search resources..."));
-        searchBox.setChangedListener(this::onResourceSearchChanged);
-        this.addDrawableChild(searchBox);
 
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("💾 Save Changes"), button -> saveResourceChanges())
-            .dimensions(this.width - 350, 45, 120, buttonHeight).build());
+        searchBox = new EditBox(this.font, 30, 56, 210, 18, Component.literal("Search Resources"));
+        searchBox.setHint(Component.literal("Search resources..."));
+        searchBox.setResponder(this::onResourceSearchChanged);
+        this.addRenderableWidget(searchBox);
+
+        this.addRenderableWidget(Button.builder(Component.literal("Save Changes"), button -> saveResourceChanges())
+            .bounds(this.width - 130, 56, 110, 18).build());
 
         loadResources();
     }
@@ -173,9 +194,9 @@ public class SandboxViewer extends Screen {
         }
         selectedResources.clear();
         modifiedResources.clear();
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player != null) {
-            client.player.sendMessage(Text.literal("Resources saved successfully!"), true);
+            client.player.displayClientMessage(Component.literal("Resources saved successfully!"), true);
         }
     }
 
@@ -205,7 +226,6 @@ public class SandboxViewer extends Screen {
                 .sorted((a, b) -> a.name.compareToIgnoreCase(b.name))
                 .collect(Collectors.toList());
         } else {
-            // In Resource Viewer, show only >0 amounts by default, but when searching, include zeroes too
             boolean hasSearch = resourceSearchTerm != null && !resourceSearchTerm.isEmpty();
             filteredResources = resources.stream()
                 .filter(resource -> hasSearch || resource.amount > 0)
@@ -213,7 +233,6 @@ public class SandboxViewer extends Screen {
                 .sorted((a, b) -> a.name.compareToIgnoreCase(b.name))
                 .collect(Collectors.toList());
         }
-        // Clamp scroll after filtering so results are visible
         int maxVisible = getResourceMaxVisibleItems();
         int maxOffset = Math.max(0, filteredResources.size() - maxVisible);
         if (scrollOffset > maxOffset) scrollOffset = maxOffset;
@@ -227,7 +246,6 @@ public class SandboxViewer extends Screen {
                 .filter(name -> name.toLowerCase().contains(recipeSearchTerm.toLowerCase()))
                 .collect(Collectors.toList());
         }
-        // Clamp scroll after filtering so results are visible
         int maxVisible = getRecipeMaxVisibleItems();
         int maxOffset = Math.max(0, filteredRecipeNames.size() - maxVisible);
         if (scrollOffset > maxOffset) scrollOffset = maxOffset;
@@ -318,7 +336,11 @@ public class SandboxViewer extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent ctx, boolean doubleClick) {
+        double mouseX = ctx.x();
+        double mouseY = ctx.y();
+        int button = ctx.button();
+
         SandboxWidget widget = SandboxWidget.getInstance();
         if (widget.isEnabled() && widget.isRepositioning()) {
             widget.handleMouseClick(mouseX, mouseY);
@@ -330,17 +352,16 @@ public class SandboxViewer extends Screen {
             activeTextField = null;
 
             boolean textFieldClicked = false;
-            for (Map.Entry<String, TextFieldWidget> entry : resourceAmountFields.entrySet()) {
-                TextFieldWidget field = entry.getValue();
+            for (Map.Entry<String, EditBox> entry : resourceAmountFields.entrySet()) {
+                EditBox field = entry.getValue();
                 if (field.isMouseOver(mouseX, mouseY)) {
                     field.setFocused(true);
-                    field.mouseClicked(mouseX, mouseY, button);
                     textFieldClicked = true;
                     activeTextField = entry.getKey();
                     
                     if (!entry.getKey().equals(previousActiveField)) {
-                        field.setSelectionStart(0);
-                        field.setSelectionEnd(field.getText().length());
+                        field.setCursorPosition(0);
+                        field.setHighlightPos(field.getValue().length());
                     }
                 } else {
                     field.setFocused(false);
@@ -359,38 +380,35 @@ public class SandboxViewer extends Screen {
                 return true;
             }
         }
-        
-        return super.mouseClicked(mouseX, mouseY, button);
+
+        // (Screen's new event system handles child widget clicks automatically)
+        return super.mouseClicked(ctx, doubleClick);
     }
-    
+
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent event) {
+        int keyCode = event.key();
+        int modifiers = event.modifiers();
         if (mode == Mode.MODIFY_RESOURCES && activeTextField != null) {
-            TextFieldWidget field = resourceAmountFields.get(activeTextField);
+            EditBox field = resourceAmountFields.get(activeTextField);
             if (field != null && field.isFocused()) {
-                if (keyCode == 258) {
+                if (keyCode == 258) { // Tab – move between fields
                     boolean shiftPressed = (modifiers & 1) != 0;
                     moveToNextTextField(shiftPressed);
                     return true;
                 }
-                
-                if (keyCode == 257 || keyCode == 335) {
+                if (keyCode == 257 || keyCode == 335) { // Enter – confirm and advance
                     field.setFocused(false);
                     moveToNextTextField(false);
                     return true;
                 }
-                
-                return field.keyPressed(keyCode, scanCode, modifiers);
+                // Fall through so backspace / delete reach the EditBox via super
             }
         }
-        
-        if (searchBox != null && searchBox.isFocused() && searchBox.keyPressed(keyCode, scanCode, modifiers)) {
-            return true;
-        }
-        
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        // (Screen's new event system handles EditBox key input automatically)
+        return super.keyPressed(event);
     }
-    
+
     private void moveToNextTextField(boolean reverse) {
         if (filteredResources.isEmpty() || activeTextField == null) return;
 
@@ -424,55 +442,33 @@ public class SandboxViewer extends Screen {
         activeTextField = newActiveField;
         
         if (resourceAmountFields.containsKey(newActiveField)) {
-            TextFieldWidget field = resourceAmountFields.get(newActiveField);
+            EditBox field = resourceAmountFields.get(newActiveField);
             field.setFocused(true);
-            field.setSelectionStart(0);
-            field.setSelectionEnd(field.getText().length());
+            field.setCursorPosition(0);
+            field.setHighlightPos(field.getValue().length());
         }
     }
     
     @Override
-    public boolean charTyped(char chr, int modifiers) {
-        if (mode == Mode.MODIFY_RESOURCES && activeTextField != null) {
-            TextFieldWidget field = resourceAmountFields.get(activeTextField);
-            if (field != null && field.isFocused()) {
-                return field.charTyped(chr, modifiers);
-            }
-        }
-        
-        if (searchBox != null && searchBox.isFocused() && searchBox.charTyped(chr, modifiers)) {
-            return true;
-        }
-        
-        return super.charTyped(chr, modifiers);
+    public boolean charTyped(CharacterEvent event) {
+        // Screen's new event system routes char events to focused widgets
+        return super.charTyped(event);
     }
 
     private int getResourceMaxVisibleItems() {
-        int contentY = 35 + 5;
-        int contentHeight = this.height - contentY - 20;
-        int gridStartY = contentY + 35;
-        int headerHeight = 24;
+        int listHeight = Math.max(0, this.height - 10 - 139);
         int lineHeight = 30;
-        int listStartY = gridStartY + headerHeight;
-        int listHeight = contentHeight - (listStartY - contentY);
-        
         if (mode == Mode.MODIFY_RESOURCES) {
-            int maxVisibleRows = listHeight / lineHeight;
-            return maxVisibleRows;
+            return Math.max(1, listHeight / lineHeight);
         } else {
             int columnsCount = Math.max(1, (this.width - 40) / 220);
-            int maxVisibleRows = listHeight / lineHeight;
-            return maxVisibleRows * columnsCount;
+            return Math.max(1, listHeight / lineHeight) * columnsCount;
         }
     }
 
     private int getRecipeMaxVisibleItems() {
-        int contentY = 35 + 5;
-        int contentHeight = this.height - contentY - 20;
-        int lineHeight = 24;
-        int listStartY = contentY + 70;
-        int listHeight = contentHeight - (listStartY - contentY);
-        return listHeight / lineHeight;
+        int listHeight = Math.max(0, this.height - 10 - 150);
+        return Math.max(1, listHeight / 24);
     }
 
     @Override
@@ -514,51 +510,50 @@ public class SandboxViewer extends Screen {
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
+    private static final int CONTENT_Y = 80;
+
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        clickableElements.clear();
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         try {
-            context.fill(0, 0, this.width, this.height, 0xFF101010);
+            context.fill(0, 0, this.width, this.height, 0xFF0E0E0E);
 
-            int headerHeight = 35;
-            context.fill(0, 0, this.width, headerHeight, TITLE_BG);
-            context.drawBorder(0, 0, this.width, headerHeight, BORDER_COLOR);
-            
-            String headingText = "Skyblock Resource Calculator";
-            context.drawCenteredTextWithShadow(textRenderer, 
-                Text.literal(headingText).setStyle(Style.EMPTY.withColor(Formatting.GOLD).withBold(true)),
-                this.width / 2, 10, WHITE);
+            context.fill(0, 0, this.width, 30, TITLE_BG);
+            drawBorder(context, 0, 0, this.width, 30, BORDER_COLOR);
+            String titleStr = "Skyblock Resource Calculator";
+            context.drawString(font,
+                Component.literal(titleStr).setStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true)),
+                this.width / 2 - font.width(titleStr) / 2, 11, GOLD, false);
 
-            int tabWidth = 100;
-            int tabHeight = 25;
-            int startX = 20;
-            int tabY = headerHeight - tabHeight;
+            context.fill(0, 30, this.width, 54, 0xFF161616);
 
-            renderTab(context, "Resources", startX, tabY, tabWidth, tabHeight, mode == Mode.RESOURCE_VIEWER, () -> {
-                mode = Mode.RESOURCE_VIEWER; this.init();
-            });
-            renderTab(context, "Recipes", startX + tabWidth, tabY, tabWidth, tabHeight, mode == Mode.RECIPE_VIEWER, () -> {
-                mode = Mode.RECIPE_VIEWER; this.init();
-            });
-            renderTab(context, "Forge", startX + 2 * tabWidth, tabY, tabWidth, tabHeight, mode == Mode.FORGE_MODE, () -> {
-                mode = Mode.FORGE_MODE; this.init();
-            });
-            renderTab(context, "Modify", startX + 3 * tabWidth, tabY, tabWidth, tabHeight, mode == Mode.MODIFY_RESOURCES, () -> {
-                mode = Mode.MODIFY_RESOURCES; this.init();
-            });
+            int activeTabX = switch (mode) {
+                case RESOURCE_VIEWER  -> 20;
+                case RECIPE_VIEWER   -> 130;
+                case FORGE_MODE      -> 240;
+                case MODIFY_RESOURCES -> 350;
+            };
+            context.fill(activeTabX, 52, activeTabX + 110, 54, 0xFF5FAF3F);
+
+            context.fill(0, 54, this.width, 78, 0xFF121212);
+            context.fill(0, 77, this.width, 78, BORDER_COLOR);
+
+            if (mode == Mode.FORGE_MODE) {
+                context.drawString(font, "x", 204, 62, TEXT_SECONDARY, false);
+            }
 
             int contentX = 20;
-            int contentY = headerHeight + 5;
             int contentWidth = this.width - 40;
-            int contentHeight = this.height - contentY - 20;
-            context.fill(contentX, contentY, contentX + contentWidth, contentY + contentHeight, PANEL_BG);
-            context.drawBorder(contentX, contentY, contentWidth, contentHeight, BORDER_COLOR);
+            int contentHeight = this.height - CONTENT_Y - 10;
+            context.fill(contentX, CONTENT_Y, contentX + contentWidth, CONTENT_Y + contentHeight, PANEL_BG);
+            drawBorder(context, contentX, CONTENT_Y, contentWidth, contentHeight, BORDER_COLOR);
+
+            clickableElements.clear();
 
             switch (mode) {
-                case RESOURCE_VIEWER -> renderResourceViewer(context, contentX, contentY, contentWidth, contentHeight);
-                case RECIPE_VIEWER -> renderRecipeViewer(context, contentX, contentY, contentWidth, contentHeight);
-                case FORGE_MODE -> renderForgeMode(context, contentX, contentY, contentWidth, contentHeight);
-                case MODIFY_RESOURCES -> renderModifyResources(context, contentX, contentY, contentWidth, contentHeight);
+                case RESOURCE_VIEWER  -> renderResourceViewer(context, contentX, CONTENT_Y, contentWidth, contentHeight);
+                case RECIPE_VIEWER   -> renderRecipeViewer(context, contentX, CONTENT_Y, contentWidth, contentHeight);
+                case FORGE_MODE      -> renderForgeMode(context, contentX, CONTENT_Y, contentWidth, contentHeight);
+                case MODIFY_RESOURCES -> renderModifyResources(context, contentX, CONTENT_Y, contentWidth, contentHeight);
             }
 
             super.render(context, mouseX, mouseY, delta);
@@ -567,14 +562,8 @@ public class SandboxViewer extends Screen {
         }
     }
 
-    private void renderTab(DrawContext context, String text, int x, int y, int width, int height, boolean selected, Runnable action) {
-        context.fill(x, y, x + width, y + height, selected ? SELECTED_BG : PANEL_BG);
-        context.drawBorder(x, y, width, height, BORDER_COLOR);
-        drawCenteredText(context, text, x + width / 2, y + (height - textRenderer.fontHeight) / 2, WHITE);
-        clickableElements.add(new ClickableElement(x, y, width, height, action));
-    }
 
-    private void renderResourceViewer(DrawContext context, int contentX, int contentY, int contentWidth, int contentHeight) {
+    private void renderResourceViewer(GuiGraphics context, int contentX, int contentY, int contentWidth, int contentHeight) {
         int lineHeight = 30;
         int columnsCount = Math.max(1, contentWidth / 220);
         int columnWidth = contentWidth / columnsCount;
@@ -585,10 +574,10 @@ public class SandboxViewer extends Screen {
 
         int headerHeight = 24;
         context.fill(contentX, gridStartY, contentX + contentWidth, gridStartY + headerHeight, ITEM_BG_ALT);
-        context.drawBorder(contentX, gridStartY, contentWidth, headerHeight, BORDER_COLOR);
+        drawBorder(context, contentX, gridStartY, contentWidth, headerHeight, BORDER_COLOR);
 
-        context.drawText(textRenderer, "Resource Name", contentX + 12, gridStartY + 8, GOLD, false);
-        context.drawText(textRenderer, "Amount", contentX + contentWidth - columnWidth/4 - 40, gridStartY + 8, GOLD, false);
+        context.drawString(font, "Resource Name", contentX + 12, gridStartY + 8, GOLD, false);
+        context.drawString(font, "Amount", contentX + contentWidth - columnWidth/4 - 40, gridStartY + 8, GOLD, false);
 
         int listStartY = gridStartY + headerHeight;
         int listHeight = contentY + contentHeight - listStartY;
@@ -614,10 +603,10 @@ public class SandboxViewer extends Screen {
                 context.fill(itemX, itemY, itemX + itemWidth, itemY + lineHeight - 4, SELECTED_BG);
             }
 
-            context.drawText(textRenderer, resource.name, itemX + 8, itemY + (lineHeight - textRenderer.fontHeight) / 2, WHITE, false);
+            context.drawString(font, resource.name, itemX + 8, itemY + (lineHeight - font.lineHeight) / 2, WHITE, false);
             String amountText = resource.amount + "×";
-            int amountWidth = textRenderer.getWidth(amountText);
-            context.drawText(textRenderer, amountText, itemX + itemWidth - amountWidth - 8, itemY + (lineHeight - textRenderer.fontHeight) / 2, GOLD, false);
+            int amountWidth = font.width(amountText);
+            context.drawString(font, amountText, itemX + itemWidth - amountWidth - 8, itemY + (lineHeight - font.lineHeight) / 2, GOLD, false);
             index++;
         }
 
@@ -636,12 +625,12 @@ public class SandboxViewer extends Screen {
     }
 
     private boolean isMouseOver(int x, int y, int width, int height) {
-        double mouseX = this.client.mouse.getX() * (double)this.client.getWindow().getScaledWidth() / (double)this.client.getWindow().getWidth();
-        double mouseY = this.client.mouse.getY() * (double)this.client.getWindow().getScaledHeight() / (double)this.client.getWindow().getHeight();
+        double mouseX = this.minecraft.mouseHandler.xpos() * (double)this.minecraft.getWindow().getGuiScaledWidth() / (double)this.minecraft.getWindow().getScreenWidth();
+        double mouseY = this.minecraft.mouseHandler.ypos() * (double)this.minecraft.getWindow().getGuiScaledHeight() / (double)this.minecraft.getWindow().getScreenHeight();
         return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }
 
-    private void renderRecipeViewer(DrawContext context, int contentX, int contentY, int contentWidth, int contentHeight) {
+    private void renderRecipeViewer(GuiGraphics context, int contentX, int contentY, int contentWidth, int contentHeight) {
         int leftPanelWidth = 220;
         int leftPanelX = contentX + 10;
         int rightPanelX = contentX + leftPanelWidth + 20;
@@ -657,7 +646,7 @@ public class SandboxViewer extends Screen {
         }
     }
     
-    private void renderForgeMode(DrawContext context, int contentX, int contentY, int contentWidth, int contentHeight) {
+    private void renderForgeMode(GuiGraphics context, int contentX, int contentY, int contentWidth, int contentHeight) {
         int leftPanelWidth = 220;
         int leftPanelX = contentX + 10;
         int rightPanelX = contentX + leftPanelWidth + 20;
@@ -674,13 +663,13 @@ public class SandboxViewer extends Screen {
         renderForgeDetails(context, rightPanelX, contentY, contentWidth - leftPanelWidth - 40, contentHeight);
     }
 
-    private void renderRecipeList(DrawContext context, int x, int y, int width, int height) {
+    private void renderRecipeList(GuiGraphics context, int x, int y, int width, int height) {
         int recipeListY = y + 40;
         int lineHeight = 24;
 
         context.fill(x, recipeListY, x + width - 10, recipeListY + 24, TITLE_BG);
-        context.drawBorder(x, recipeListY, width - 10, 24, BORDER_COLOR);
-        context.drawText(textRenderer, "Available Recipes", x + 10, recipeListY + 8, GOLD, false);
+        drawBorder(context, x, recipeListY, width - 10, 24, BORDER_COLOR);
+        context.drawString(font, "Available Recipes", x + 10, recipeListY + 8, GOLD, false);
 
         recipeListY += 30;
 
@@ -707,10 +696,10 @@ public class SandboxViewer extends Screen {
 
                 String displayName = name;
                 int maxWidth = width - 30;
-                if (textRenderer.getWidth(displayName) > maxWidth) {
-                    displayName = textRenderer.trimToWidth(displayName, maxWidth - textRenderer.getWidth("...")) + "...";
+                if (font.width(displayName) > maxWidth) {
+                    displayName = font.plainSubstrByWidth(displayName, maxWidth - font.width("...")) + "...";
                 }
-                context.drawText(textRenderer, displayName, x + 8, itemY + (lineHeight - textRenderer.fontHeight) / 2, isSelected ? WHITE : TEXT_SECONDARY, false);
+                context.drawString(font, displayName, x + 8, itemY + (lineHeight - font.lineHeight) / 2, isSelected ? WHITE : TEXT_SECONDARY, false);
             }
             visibleIndex++;
         }
@@ -732,21 +721,20 @@ public class SandboxViewer extends Screen {
         }
     }
 
-    private void renderRecipeDetails(DrawContext context, int x, int y, int width, int height) {
+    private void renderRecipeDetails(GuiGraphics context, int x, int y, int width, int height) {
         int rightColumnY = y + 10;
 
         context.fill(x, rightColumnY, x + width, rightColumnY + 40, TITLE_BG);
-        context.drawBorder(x, rightColumnY, width, 40, BORDER_COLOR);
+        drawBorder(context, x, rightColumnY, width, 40, BORDER_COLOR);
         drawCenteredText(context, selectedRecipe, x + width / 2, rightColumnY + 15, GOLD);
         rightColumnY += 50;
-    // Combined scroll panel (materials + tree)
         recipeCombinedAreaX = x;
         recipeCombinedAreaY = rightColumnY;
         recipeCombinedAreaWidth = width;
         recipeCombinedAreaHeight = y + height - rightColumnY - 10;
 
         context.fill(recipeCombinedAreaX, recipeCombinedAreaY, recipeCombinedAreaX + recipeCombinedAreaWidth, recipeCombinedAreaY + recipeCombinedAreaHeight, PANEL_BG);
-        context.drawBorder(recipeCombinedAreaX, recipeCombinedAreaY, recipeCombinedAreaWidth, recipeCombinedAreaHeight, BORDER_COLOR);
+        drawBorder(context, recipeCombinedAreaX, recipeCombinedAreaY, recipeCombinedAreaWidth, recipeCombinedAreaHeight, BORDER_COLOR);
 
         int contentY = recipeCombinedAreaY + 10;
         int headerH = 20;
@@ -780,7 +768,7 @@ public class SandboxViewer extends Screen {
         int drawY = contentY - recipeCombinedScrollOffset;
 
         context.fill(x, drawY, x + width, drawY + headerH, ITEM_BG_ALT);
-        context.drawText(textRenderer, "Required Materials", x + 10, drawY + 6, GOLD, false);
+        context.drawString(font, "Required Materials", x + 10, drawY + 6, GOLD, false);
         drawY += headerH + 6;
         int cardWidth = 180;
         int cardsPerRow = Math.max(1, (width - 20) / cardWidth);
@@ -794,23 +782,23 @@ public class SandboxViewer extends Screen {
                 int itemY = drawY + row * 34;
                 if (itemY + 30 >= recipeCombinedAreaY && itemY <= recipeCombinedAreaY + recipeCombinedAreaHeight) {
                     context.fill(itemX, itemY, itemX + cardWidth, itemY + 28, ITEM_BG);
-                    context.drawBorder(itemX, itemY, cardWidth, 28, BORDER_COLOR);
-                    context.drawText(textRenderer, entry.getKey(), itemX + 8, itemY + 10, WHITE, false);
+                    drawBorder(context, itemX, itemY, cardWidth, 28, BORDER_COLOR);
+                    context.drawString(font, entry.getKey(), itemX + 8, itemY + 10, WHITE, false);
                     String qtyText = entry.getValue() + "×";
-                    context.drawText(textRenderer, qtyText, itemX + cardWidth - textRenderer.getWidth(qtyText) - 8, itemY + 10, GOLD, false);
+                    context.drawString(font, qtyText, itemX + cardWidth - font.width(qtyText) - 8, itemY + 10, GOLD, false);
                 }
                 materialIndex++;
             }
             int materialRows = (simpleRecipe.size() + cardsPerRow - 1) / cardsPerRow;
             drawY += materialRows * 34 + 4;
         } else {
-            context.drawText(textRenderer, "No materials required", x + 10, drawY + 5, TEXT_SECONDARY, false);
+            context.drawString(font, "No materials required", x + 10, drawY + 5, TEXT_SECONDARY, false);
             drawY += 24;
         }
 
     drawY += 10;
         context.fill(x, drawY, x + width, drawY + headerH, ITEM_BG_ALT);
-        context.drawText(textRenderer, "Crafting Tree (Click to expand)", x + 10, drawY + 6, GOLD, false);
+        context.drawString(font, "Crafting Tree (Click to expand)", x + 10, drawY + 6, GOLD, false);
         drawY += headerH + 6;
         drawY = renderRecipeTree(context, expandedRecipeTree, "", x + 15, drawY);
 
@@ -828,49 +816,48 @@ public class SandboxViewer extends Screen {
         }
     }
     
-    private void renderForgeDetails(DrawContext context, int x, int y, int width, int height) {
+    private void renderForgeDetails(GuiGraphics context, int x, int y, int width, int height) {
         int rightColumnY = y + 10;
 
         context.fill(x, rightColumnY, x + width, rightColumnY + 40, TITLE_BG);
-        context.drawBorder(x, rightColumnY, width, 40, BORDER_COLOR);
+        drawBorder(context, x, rightColumnY, width, 40, BORDER_COLOR);
         drawCenteredText(context, selectedRecipe, x + width / 2, rightColumnY + 15, GOLD);
         rightColumnY += 50;
         
         context.fill(x, rightColumnY, x + width, rightColumnY + 60, ITEM_BG);
-        context.drawBorder(x, rightColumnY, width, 60, BORDER_COLOR);
-        context.drawText(textRenderer, "Crafting Amount: ", x + 10, rightColumnY + 10, WHITE, false);
-        context.drawText(textRenderer, craftAmount + "", x + 120, rightColumnY + 10, GOLD, false);
+        drawBorder(context, x, rightColumnY, width, 60, BORDER_COLOR);
+        context.drawString(font, "Crafting Amount: ", x + 10, rightColumnY + 10, WHITE, false);
+        context.drawString(font, craftAmount + "", x + 120, rightColumnY + 10, GOLD, false);
         String statusIcon = craftable ? "✓" : "✗";
         String craftableText = craftable ? "Can be crafted!" : "Missing ingredients";
         int craftableColor = craftable ? SUCCESS_GREEN : ERROR_RED;
-        context.drawText(textRenderer, statusIcon, x + 10, rightColumnY + 30, craftableColor, false);
-        context.drawText(textRenderer, craftableText, x + 30, rightColumnY + 30, craftableColor, false);
+        context.drawString(font, statusIcon, x + 10, rightColumnY + 30, craftableColor, false);
+        context.drawString(font, craftableText, x + 30, rightColumnY + 30, craftableColor, false);
         rightColumnY += 70;
 
         if (!messages.isEmpty()) {
             context.fill(x, rightColumnY, x + width, rightColumnY + 30, ITEM_BG_ALT);
-            context.drawText(textRenderer, "Crafting Messages", x + 10, rightColumnY + 10, GOLD, false);
+            context.drawString(font, "Crafting Messages", x + 10, rightColumnY + 10, GOLD, false);
             rightColumnY += 35;
             int msgBoxHeight = Math.min(messages.size() * 20 + 10, 100);
             context.fill(x, rightColumnY, x + width, rightColumnY + msgBoxHeight, PANEL_BG);
-            context.drawBorder(x, rightColumnY, width, msgBoxHeight, BORDER_COLOR);
+            drawBorder(context, x, rightColumnY, width, msgBoxHeight, BORDER_COLOR);
             int msgY = rightColumnY + 8;
             for (int i = 0; i < messages.size() && msgY < rightColumnY + msgBoxHeight - 15; i++) {
                 String msg = "• " + messages.get(i);
-                context.drawText(textRenderer, msg, x + 12, msgY, TEXT_SECONDARY, false);
+                context.drawString(font, msg, x + 12, msgY, TEXT_SECONDARY, false);
                 msgY += 20;
             }
             rightColumnY += msgBoxHeight + 15;
         }
 
-    // Combined scroll panel (materials + tree)
         forgeCombinedAreaX = x;
         forgeCombinedAreaY = rightColumnY;
         forgeCombinedAreaWidth = width;
         forgeCombinedAreaHeight = y + height - rightColumnY - 10;
 
         context.fill(forgeCombinedAreaX, forgeCombinedAreaY, forgeCombinedAreaX + forgeCombinedAreaWidth, forgeCombinedAreaY + forgeCombinedAreaHeight, PANEL_BG);
-        context.drawBorder(forgeCombinedAreaX, forgeCombinedAreaY, forgeCombinedAreaWidth, forgeCombinedAreaHeight, BORDER_COLOR);
+        drawBorder(context, forgeCombinedAreaX, forgeCombinedAreaY, forgeCombinedAreaWidth, forgeCombinedAreaHeight, BORDER_COLOR);
 
         int contentY = forgeCombinedAreaY + 10;
         int headerH = 20;
@@ -905,7 +892,7 @@ public class SandboxViewer extends Screen {
         int drawY = contentY - forgeCombinedScrollOffset;
 
         context.fill(x, drawY, x + width, drawY + headerH, ITEM_BG_ALT);
-        context.drawText(textRenderer, "Required Materials", x + 10, drawY + 6, GOLD, false);
+        context.drawString(font, "Required Materials", x + 10, drawY + 6, GOLD, false);
         drawY += headerH + 6;
         int cardWidth = 180;
         int cardsPerRow = Math.max(1, (width - 20) / cardWidth);
@@ -918,23 +905,23 @@ public class SandboxViewer extends Screen {
                 int itemY = drawY + row * 34;
                 if (itemY + 30 >= forgeCombinedAreaY && itemY <= forgeCombinedAreaY + forgeCombinedAreaHeight) {
                     context.fill(itemX, itemY, itemX + cardWidth, itemY + 28, ITEM_BG);
-                    context.drawBorder(itemX, itemY, cardWidth, 28, BORDER_COLOR);
-                    context.drawText(textRenderer, entry.getKey(), itemX + 8, itemY + 10, WHITE, false);
+                    drawBorder(context, itemX, itemY, cardWidth, 28, BORDER_COLOR);
+                    context.drawString(font, entry.getKey(), itemX + 8, itemY + 10, WHITE, false);
                     String qtyText = entry.getValue() + "×";
-                    context.drawText(textRenderer, qtyText, itemX + cardWidth - textRenderer.getWidth(qtyText) - 8, itemY + 10, GOLD, false);
+                    context.drawString(font, qtyText, itemX + cardWidth - font.width(qtyText) - 8, itemY + 10, GOLD, false);
                 }
                 materialIndex++;
             }
             int materialRows = (simpleRecipe.size() + cardsPerRow - 1) / cardsPerRow;
             drawY += materialRows * 34 + 4;
         } else {
-            context.drawText(textRenderer, "No materials required", x + 10, drawY + 5, TEXT_SECONDARY, false);
+            context.drawString(font, "No materials required", x + 10, drawY + 5, TEXT_SECONDARY, false);
             drawY += 24;
         }
 
     drawY += 10;
         context.fill(x, drawY, x + width, drawY + headerH, ITEM_BG_ALT);
-        context.drawText(textRenderer, "Required Recipe Tree (Click to Expand)", x + 10, drawY + 6, GOLD, false);
+        context.drawString(font, "Required Recipe Tree (Click to Expand)", x + 10, drawY + 6, GOLD, false);
         drawY += headerH + 6;
         drawY = renderRecipeTree(context, remainingResult != null ? remainingResult.full_recipe : null, "", x + 15, drawY);
 
@@ -952,7 +939,7 @@ public class SandboxViewer extends Screen {
         }
     }
 
-    private int renderRecipeTree(DrawContext context, Object nodeObj, String path, int x, int y) {
+    private int renderRecipeTree(GuiGraphics context, Object nodeObj, String path, int x, int y) {
         if (nodeObj == null) return y;
 
         int lineHeight = 24;
@@ -982,18 +969,18 @@ public class SandboxViewer extends Screen {
             textColor = (resourceAmount != null && resourceAmount >= amount) ? SUCCESS_GREEN : ERROR_RED;
         }
 
-        int nodeWidth = Math.min(300, Math.max(100, textRenderer.getWidth(name) + textRenderer.getWidth(amount + "×") + 40));
+        int nodeWidth = Math.min(300, Math.max(100, font.width(name) + font.width(amount + "×") + 40));
         if (context != null) {
             context.fill(x - 5, y, x + nodeWidth, y + lineHeight, ITEM_BG);
-            context.drawBorder(x - 5, y, nodeWidth + 5, lineHeight, BORDER_COLOR);
+            drawBorder(context, x - 5, y, nodeWidth + 5, lineHeight, BORDER_COLOR);
             if (isMouseOver(x - 5, y, nodeWidth, lineHeight)) {
                 context.fill(x - 5, y, x + nodeWidth, y + lineHeight, SELECTED_BG);
             }
             if (hasIngredients) {
                 clickableElements.add(new ClickableElement(x - 5, y, nodeWidth, lineHeight, () -> toggleNodeExpanded(fullPath)));
             }
-            context.drawText(textRenderer, amount + "×", x + 15, y + (lineHeight - textRenderer.fontHeight) / 2, GOLD, false);
-            context.drawText(textRenderer, name, x + 15 + textRenderer.getWidth(amount + "×") + 5, y + (lineHeight - textRenderer.fontHeight) / 2, textColor, false);
+            context.drawString(font, amount + "×", x + 15, y + (lineHeight - font.lineHeight) / 2, GOLD, false);
+            context.drawString(font, name, x + 15 + font.width(amount + "×") + 5, y + (lineHeight - font.lineHeight) / 2, textColor, false);
         }
         int endY = y + lineHeight;
         if (isExpanded && hasIngredients) {
@@ -1008,13 +995,13 @@ public class SandboxViewer extends Screen {
         return endY;
     }
 
-    private void drawCenteredText(DrawContext context, String text, int centerX, int y, int color) {
-        context.drawText(textRenderer, text, centerX - textRenderer.getWidth(text) / 2, y, color, false);
+    private void drawCenteredText(GuiGraphics context, String text, int centerX, int y, int color) {
+        context.drawString(font, text, centerX - font.width(text) / 2, y, color, false);
     }
     
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
@@ -1025,7 +1012,7 @@ public class SandboxViewer extends Screen {
 
     public static boolean shouldOpenSandboxViewer = false;
 
-    private void renderModifyResources(DrawContext context, int contentX, int contentY, int contentWidth, int contentHeight) {
+    private void renderModifyResources(GuiGraphics context, int contentX, int contentY, int contentWidth, int contentHeight) {
         int lineHeight = 30;
         
         int leftPanelWidth = contentWidth - 200;
@@ -1047,11 +1034,11 @@ public class SandboxViewer extends Screen {
 
         int headerHeight = 24;
         context.fill(contentX, gridStartY, contentX + leftPanelWidth, gridStartY + headerHeight, ITEM_BG_ALT);
-        context.drawBorder(contentX, gridStartY, leftPanelWidth, headerHeight, BORDER_COLOR);
+        drawBorder(context, contentX, gridStartY, leftPanelWidth, headerHeight, BORDER_COLOR);
 
-        context.drawText(textRenderer, "Resource Name", contentX + 12, gridStartY + 8, GOLD, false);
-        context.drawText(textRenderer, "Amount", contentX + leftPanelWidth - 120, gridStartY + 8, GOLD, false);
-        context.drawText(textRenderer, "Actions", contentX + leftPanelWidth - 60, gridStartY + 8, GOLD, false);
+        context.drawString(font, "Resource Name", contentX + 12, gridStartY + 8, GOLD, false);
+        context.drawString(font, "Amount", contentX + leftPanelWidth - 120, gridStartY + 8, GOLD, false);
+        context.drawString(font, "Actions", contentX + leftPanelWidth - 60, gridStartY + 8, GOLD, false);
 
         int listStartY = gridStartY + headerHeight;
         context.fill(contentX, listStartY, contentX + leftPanelWidth, contentY + contentHeight, PANEL_BG);
@@ -1061,15 +1048,13 @@ public class SandboxViewer extends Screen {
             return;
         }
 
-        //Right panel - Modified Resources
         context.fill(rightPanelX, contentY, rightPanelX + 180, contentY + 40, TITLE_BG);
-        context.drawBorder(rightPanelX, contentY, 180, 40, BORDER_COLOR);
+        drawBorder(context, rightPanelX, contentY, 180, 40, BORDER_COLOR);
         drawCenteredText(context, "Modified Resources", rightPanelX + 90, contentY + 15, GOLD);
         
         context.fill(rightPanelX, contentY + 45, rightPanelX + 180, contentY + contentHeight, PANEL_BG);
-        context.drawBorder(rightPanelX, contentY + 45, 180, contentHeight - 45, BORDER_COLOR);
+        drawBorder(context, rightPanelX, contentY + 45, 180, contentHeight - 45, BORDER_COLOR);
         
-        // Render the list of resources with increment/decrement buttons
         for (int i = startIndex; i < Math.min(startIndex + maxVisibleItems, totalItems); i++) {
             ResourcesManager.ResourceEntry resource = filteredResources.get(i);
             int row = i - startIndex;
@@ -1081,27 +1066,23 @@ public class SandboxViewer extends Screen {
             int bgColor = (i % 2 == 0) ? ITEM_BG : ITEM_BG_ALT;
             context.fill(x, y, x + leftPanelWidth - 10, y + lineHeight - 10, bgColor);
             
-            context.drawText(textRenderer, resource.name, x + 5, y + 7, WHITE, false);
+            context.drawString(font, resource.name, x + 5, y + 7, WHITE, false);
             
-            // Create or update text field for this resource amount
             final String resourceKey = resource.name;
             int amountFieldWidth = 60;
             int amountFieldX = x + leftPanelWidth - 140;
             int amountFieldY = y + 2;
             
-            TextFieldWidget amountField = resourceAmountFields.get(resourceKey);
+            EditBox amountField = resourceAmountFields.get(resourceKey);
             if (amountField == null) {
-                // Create a new text field for this resource
-                final TextFieldWidget newField = new TextFieldWidget(textRenderer, amountFieldX, amountFieldY, amountFieldWidth, 16, Text.literal(""));
-                newField.setText(String.valueOf(resource.amount));
-                newField.setMaxLength(10); // Limit to reasonable number length
+                final EditBox newField = new EditBox(font, amountFieldX, amountFieldY, amountFieldWidth, 16, Component.literal(""));
+                newField.setValue(String.valueOf(resource.amount));
+                newField.setMaxLength(10);
                 
-                // Set the changed listener to update resource amount on text change
-                newField.setChangedListener(text -> {
+                newField.setResponder(text -> {
                     try {
                         int newAmount = text.isEmpty() ? 0 : Integer.parseInt(text);
                         if (newAmount >= 0) {
-                            // Find the resource entry and update its amount
                             ResourcesManager.ResourceEntry resourceEntry = filteredResources.stream()
                                 .filter(entry -> entry.name.equals(resourceKey))
                                 .findFirst()
@@ -1113,15 +1094,14 @@ public class SandboxViewer extends Screen {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        //Reset to previous value if nan
                         ResourcesManager.ResourceEntry resourceEntry = filteredResources.stream()
                             .filter(entry -> entry.name.equals(resourceKey))
                             .findFirst()
                             .orElse(null);
                         
                         if (resourceEntry != null && resourceAmountFields.containsKey(resourceKey)) {
-                            TextFieldWidget fieldToUpdate = resourceAmountFields.get(resourceKey);
-                            fieldToUpdate.setText(String.valueOf(resourceEntry.amount));
+                            EditBox fieldToUpdate = resourceAmountFields.get(resourceKey);
+                            fieldToUpdate.setValue(String.valueOf(resourceEntry.amount));
                         }
                     }
                 });
@@ -1130,12 +1110,12 @@ public class SandboxViewer extends Screen {
                 amountField = newField;
                 
 
-                amountField.setDrawsBackground(true);
+                amountField.setBordered(true);
             } else {
                 amountField.setX(amountFieldX);
                 amountField.setY(amountFieldY);
                 
-                String currentText = amountField.getText();
+                String currentText = amountField.getValue();
                 int currentAmount;
                 try {
                     currentAmount = currentText.isEmpty() ? 0 : Integer.parseInt(currentText);
@@ -1144,7 +1124,7 @@ public class SandboxViewer extends Screen {
                 }
                 
                 if (currentAmount != resource.amount && !amountField.isFocused()) {
-                    amountField.setText(String.valueOf(resource.amount));
+                    amountField.setValue(String.valueOf(resource.amount));
                 }
             }
             
@@ -1154,27 +1134,25 @@ public class SandboxViewer extends Screen {
             context.fill(amountFieldX - 1, amountFieldY - 1, amountFieldX + amountFieldWidth + 1, amountFieldY + 18, fieldBorderColor);
             context.fill(amountFieldX, amountFieldY, amountFieldX + amountFieldWidth, amountFieldY + 17, fieldBgColor);
             
-            amountField.render(context, (int) MinecraftClient.getInstance().mouse.getX(), 
-                              (int) MinecraftClient.getInstance().mouse.getY(), 0);
+            amountField.render(context, (int) Minecraft.getInstance().mouseHandler.xpos(), 
+                              (int) Minecraft.getInstance().mouseHandler.ypos(), 0);
             
             int buttonSize = 16;
             int buttonY = y + (lineHeight - 10 - buttonSize) / 2;
             
             int minusX = x + leftPanelWidth - 80;
             context.fill(minusX, buttonY, minusX + buttonSize, buttonY + buttonSize, 0xFF444444);
-            context.drawBorder(minusX, buttonY, buttonSize, buttonSize, BORDER_COLOR);
-            context.drawText(textRenderer, "-", minusX + (buttonSize - textRenderer.getWidth("-")) / 2, 
-                             buttonY + (buttonSize - textRenderer.fontHeight) / 2, WHITE, false);
+            drawBorder(context, minusX, buttonY, buttonSize, buttonSize, BORDER_COLOR);
+            context.drawString(font, "-", minusX + (buttonSize - font.width("-")) / 2, 
+                             buttonY + (buttonSize - font.lineHeight) / 2, WHITE, false);
             
             int plusX = x + leftPanelWidth - 40;
             context.fill(plusX, buttonY, plusX + buttonSize, buttonY + buttonSize, 0xFF444444);
-            context.drawBorder(plusX, buttonY, buttonSize, buttonSize, BORDER_COLOR);
-            context.drawText(textRenderer, "+", plusX + (buttonSize - textRenderer.getWidth("+")) / 2, 
-                             buttonY + (buttonSize - textRenderer.fontHeight) / 2, WHITE, false);
+            drawBorder(context, plusX, buttonY, buttonSize, buttonSize, BORDER_COLOR);
+            context.drawString(font, "+", plusX + (buttonSize - font.width("+")) / 2, 
+                             buttonY + (buttonSize - font.lineHeight) / 2, WHITE, false);
             
             final int resourceIndex = i;
-            
-            // Add click handlers for the buttons
             clickableElements.add(new ClickableElement(minusX, buttonY, buttonSize, buttonSize, 
                                                       () -> decrementResource(resourceIndex)));
             clickableElements.add(new ClickableElement(plusX, buttonY, buttonSize, buttonSize, 
@@ -1184,15 +1162,15 @@ public class SandboxViewer extends Screen {
         int modifiedY = contentY + 55;
         int modifiedCount = 0;
         for (ResourcesManager.ResourceEntry entry : selectedResources) {
-            context.drawText(textRenderer, entry.name, rightPanelX + 10, modifiedY, WHITE, false);
-            context.drawText(textRenderer, String.valueOf(entry.amount), 
-                            rightPanelX + 180 - 10 - textRenderer.getWidth(String.valueOf(entry.amount)), 
+            context.drawString(font, entry.name, rightPanelX + 10, modifiedY, WHITE, false);
+            context.drawString(font, String.valueOf(entry.amount), 
+                            rightPanelX + 180 - 10 - font.width(String.valueOf(entry.amount)), 
                             modifiedY, GOLD, false);
             modifiedY += 20;
             modifiedCount++;
 
             if (modifiedCount >= 15) {
-                context.drawText(textRenderer, "...", rightPanelX + 90, modifiedY, TEXT_SECONDARY, false);
+                context.drawString(font, "...", rightPanelX + 90, modifiedY, TEXT_SECONDARY, false);
                 break;
             }
         }
@@ -1249,6 +1227,11 @@ public class SandboxViewer extends Screen {
 
         modifiedResources.put(resource.name, resource.amount);
     }
-    
 
+    private static void drawBorder(GuiGraphics context, int x, int y, int width, int height, int color) {
+        context.fill(x, y, x + width, y + 1, color);
+        context.fill(x, y + height - 1, x + width, y + height, color);
+        context.fill(x, y, x + 1, y + height, color);
+        context.fill(x + width - 1, y, x + width, y + height, color);
+    }
 }

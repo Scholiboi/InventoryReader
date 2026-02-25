@@ -7,9 +7,9 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.*;
 
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 
 public class IrCommandManager implements ClientModInitializer{
 
@@ -24,18 +24,18 @@ public class IrCommandManager implements ClientModInitializer{
         dispatcher.register(
             literal("ir")
                 .executes(context -> {
-                    context.getSource().sendFeedback(Text.literal("Inventory Reader Commands:")
-                        .setStyle(Style.EMPTY.withColor(Formatting.GOLD)));
-                    context.getSource().sendFeedback(Text.literal("- /ir reset: Reset all mod data")
-                        .setStyle(Style.EMPTY.withColor(Formatting.WHITE)));
-                    context.getSource().sendFeedback(Text.literal("- /ir done: Acknowledge reminder")
-                        .setStyle(Style.EMPTY.withColor(Formatting.WHITE)));
-                    context.getSource().sendFeedback(Text.literal("- /ir menu: Open Inventory Reader menu")
-                        .setStyle(Style.EMPTY.withColor(Formatting.WHITE)));
-                    context.getSource().sendFeedback(Text.literal("- /ir widget: Open Widget Customization Menu")
-                        .setStyle(Style.EMPTY.withColor(Formatting.WHITE)));
-                    context.getSource().sendFeedback(Text.literal("- /ir credits: Show credits")
-                        .setStyle(Style.EMPTY.withColor(Formatting.WHITE)));
+                    context.getSource().sendFeedback(Component.literal("Inventory Reader Commands:")
+                        .setStyle(Style.EMPTY.withColor(ChatFormatting.GOLD)));
+                    context.getSource().sendFeedback(Component.literal("- /ir reset: Reset all mod data")
+                        .setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)));
+                    context.getSource().sendFeedback(Component.literal("- /ir done: Acknowledge reminder")
+                        .setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)));
+                    context.getSource().sendFeedback(Component.literal("- /ir menu: Open Inventory Reader menu")
+                        .setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)));
+                    context.getSource().sendFeedback(Component.literal("- /ir widget: Open Widget Customization Menu")
+                        .setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)));
+                    context.getSource().sendFeedback(Component.literal("- /ir credits: Show credits")
+                        .setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE)));
                     return 1;
                 })
                 .then(literal("reset")
@@ -46,10 +46,10 @@ public class IrCommandManager implements ClientModInitializer{
                         FilePathManager.reInitializeFiles();
                         SackReader.setNeedsReminder(true);
                         context.getSource().sendFeedback(
-                            Text.literal("Inventory Reader data reset! ")
-                                .setStyle(Style.EMPTY.withColor(Formatting.GREEN))
-                                .append(Text.literal("Open a sack or type /ir done to stop reminders.")
-                                    .setStyle(Style.EMPTY.withColor(Formatting.YELLOW)))
+                            Component.literal("Inventory Reader data reset! ")
+                                .setStyle(Style.EMPTY.withColor(ChatFormatting.GREEN))
+                                .append(Component.literal("Open a sack or type /ir done to stop reminders.")
+                                    .setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW)))
                         );
                         return 1;
                     })
@@ -58,8 +58,8 @@ public class IrCommandManager implements ClientModInitializer{
                     .executes(context -> {
                         SackReader.setNeedsReminder(false);
                         SendingManager.unblockDataSend();
-                        context.getSource().sendFeedback(Text.literal("Acknowledged! Reminders stopped.")
-                            .setStyle(Style.EMPTY.withColor(Formatting.GREEN)));
+                        context.getSource().sendFeedback(Component.literal("Acknowledged! Reminders stopped.")
+                            .setStyle(Style.EMPTY.withColor(ChatFormatting.GREEN)));
                         return 1;
                     })
                 )
@@ -83,15 +83,15 @@ public class IrCommandManager implements ClientModInitializer{
                 .then(literal("credits")
                     .executes(context -> {
                         context.getSource().sendFeedback(
-                            Text.literal("Inventory Reader by Scholiboi")
-                                .setStyle(Style.EMPTY.withColor(Formatting.GOLD))
+                            Component.literal("Inventory Reader by Scholiboi")
+                                .setStyle(Style.EMPTY.withColor(ChatFormatting.GOLD))
                         );
                         context.getSource().sendFeedback(
-                            Text.literal("Data source: NotEnoughUpdates-REPO")
-                                .setStyle(Style.EMPTY.withColor(Formatting.WHITE))
-                                .append(Text.literal(" • "))
-                                .append(Text.literal("https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO")
-                                    .setStyle(Style.EMPTY.withColor(Formatting.AQUA)))
+                            Component.literal("Data source: NotEnoughUpdates-REPO")
+                                .setStyle(Style.EMPTY.withColor(ChatFormatting.WHITE))
+                                .append(Component.literal(" • "))
+                                .append(Component.literal("https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO")
+                                    .setStyle(Style.EMPTY.withColor(ChatFormatting.AQUA)))
                         );
                         return 1;
                     })

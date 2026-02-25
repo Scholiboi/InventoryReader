@@ -4,11 +4,6 @@ import com.google.gson.Gson;
 
 import inventoryreader.ir.InventoryReader;
 import inventoryreader.ir.ResourcesManager;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.network.packet.s2c.play.GameMessageS2CPacket;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.HoverEvent.ShowText;
-import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,8 +18,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.HoverEvent.ShowText;
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 
-@Mixin(ClientPlayNetworkHandler.class)
+@Mixin(ClientPacketListener.class)
 public class ChatMessageMixin {
     @Unique
     private static final Gson GSON = new Gson();
@@ -48,14 +48,14 @@ public class ChatMessageMixin {
     @Unique
     private static final ExecutorService networkExecutor = Executors.newSingleThreadExecutor();
 
-    @Inject(method = "onGameMessage", at = @At("HEAD"))
-    private void onGameMessage(GameMessageS2CPacket packet, CallbackInfo ci) {
+    @Inject(method = "handleSystemChat", at = @At("HEAD"))
+    private void onGameMessage(ClientboundSystemChatPacket packet, CallbackInfo ci) {
         if (!isProcessing.compareAndSet(false, true)) {
             return;
         }
         try{
-            Text text = packet.content();
-            List<Text> contents = text.getSiblings();
+            Component text = packet.content();
+            List<Component> contents = text.getSiblings();
 
             String messageString = text.getString();
             Map<String, Integer> itemMap = new HashMap<>();
@@ -67,7 +67,6 @@ public class ChatMessageMixin {
             boolean is2ndMatcher = matcher2.find();
 
             if ((is1stMatcher || is2ndMatcher)&&(Thread.currentThread().getName().contains("Render"))) {
-//                InventoryReader.LOGGER.info("Processing raw text: {}", text);
                 if (is1stMatcher){
                     InventoryReader.LOGGER.warn("Matcher 1 found, processing hover text");
                     HoverEvent hoverEvent1 = contents.getFirst().getStyle().getHoverEvent();
@@ -75,8 +74,8 @@ public class ChatMessageMixin {
                     ShowText innerText1 = (ShowText) hoverEvent1;
                     ShowText innerText2 = (ShowText) hoverEvent2;
 
-                    Text hoverChildren1 = null;
-                    Text hoverChildren2 = null;
+                    Component hoverChildren1 = null;
+                    Component hoverChildren2 = null;
                     if (innerText1 != null) {
                         hoverChildren1 = innerText1.value();
                     }
@@ -88,15 +87,15 @@ public class ChatMessageMixin {
                         InventoryReader.LOGGER.warn("Hover text is empty or null");
                         return;
                     }
-                    List<Text> hoverChildrenList1 = hoverChildren1.getSiblings();
-                    List<Text> hoverChildrenList2 = hoverChildren2.getSiblings();
+                    List<Component> hoverChildrenList1 = hoverChildren1.getSiblings();
+                    List<Component> hoverChildrenList2 = hoverChildren2.getSiblings();
                     itemMap = getItemMapFromText(hoverChildrenList1, itemMap);
                     itemMap = getItemMapFromText(hoverChildrenList2, itemMap);
                 } else {
                     InventoryReader.LOGGER.warn("Matcher 2 found, processing hover text");
                     HoverEvent hoverEvent = contents.getFirst().getStyle().getHoverEvent();
                     ShowText innerText = (ShowText) hoverEvent;
-                    Text hoverChildren = null;
+                    Component hoverChildren = null;
                     if (innerText != null) {
                         hoverChildren = innerText.value();
                     }
@@ -104,7 +103,7 @@ public class ChatMessageMixin {
                         InventoryReader.LOGGER.warn("Hover text is empty or null");
                         return;
                     }
-                    List<Text> hoverChildrenList = hoverChildren.getSiblings();
+                    List<Component> hoverChildrenList = hoverChildren.getSiblings();
                     itemMap = getItemMapFromText(hoverChildrenList, itemMap);
                 }
                 RESOURCESMANAGER.saveData(itemMap);
@@ -115,7 +114,7 @@ public class ChatMessageMixin {
     }
 
     @Unique
-    private Map<String, Integer> getItemMapFromText(List<Text> contents, Map<String, Integer> itemMap) {
+    private Map<String, Integer> getItemMapFromText(List<Component> contents, Map<String, Integer> itemMap) {
         int count = 0;
         String name = "";
         for (int i = 0; i < contents.size()-1; i++) {

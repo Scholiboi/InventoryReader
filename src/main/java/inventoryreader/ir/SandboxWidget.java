@@ -2,14 +2,13 @@ package inventoryreader.ir;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import net.fabricmc.fabric.api.client.rendering.v1.HudLayerRegistrationCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.IdentifiedLayer;
-import net.minecraft.util.Identifier;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.resources.ResourceLocation;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -20,12 +19,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class SandboxWidget {
-    private static final SandboxWidget INSTANCE = new SandboxWidget();
+    private static final ResourceLocation SANDBOX_WIDGET_LAYER = ResourceLocation.fromNamespaceAndPath(InventoryReader.MOD_ID, "sandbox_widget");
     private static final int DARK_PANEL_BG = 0x99271910;
     private static final int HEADER_BG = 0xCC2C4A1B;
     private static final int GOLD = 0xFFFFB728;
     private static final int RECIPE_LEVEL_INDENT = 10;
-    private static final Identifier SANDBOX_WIDGET_LAYER = Identifier.of(InventoryReader.MOD_ID, "sandbox_widget");
+    private static final SandboxWidget INSTANCE = new SandboxWidget();
     private boolean enabled = false;
     private String selectedRecipe = null;
     private RecipeManager.RecipeNode recipeTree = null;
@@ -45,12 +44,10 @@ public class SandboxWidget {
     private SandboxWidget() {
         this.resourcesManager = ResourcesManager.getInstance();
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
-        HudLayerRegistrationCallback.EVENT.register(layeredDrawer -> {
-            layeredDrawer.attachLayerBefore(IdentifiedLayer.CHAT, SANDBOX_WIDGET_LAYER, (context, tickCounter) -> {
-                if (enabled && selectedRecipe != null && recipeTree != null) {
-                    render(context);
-                }
-            });
+        HudElementRegistry.addLast(SANDBOX_WIDGET_LAYER, (context, tickCounter) -> {
+            if (enabled && selectedRecipe != null && recipeTree != null) {
+                render(context);
+            }
         });
         scheduler.scheduleAtFixedRate(this::updateRecipeData, 0, 1, TimeUnit.SECONDS);
         loadConfiguration();
@@ -98,9 +95,9 @@ public class SandboxWidget {
     public int getWidgetWidth() { return widgetWidth; }
     public int getWidgetHeight() { return widgetHeight; }
     public void setWidgetSize(int width, int height) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        int screenW = client.getWindow().getScaledWidth();
-        int screenH = client.getWindow().getScaledHeight();
+        Minecraft client = Minecraft.getInstance();
+        int screenW = client.getWindow().getGuiScaledWidth();
+        int screenH = client.getWindow().getGuiScaledHeight();
         this.widgetWidth = Math.max(180, Math.min(width, screenW - 20));
         this.widgetHeight = Math.max(120, Math.min(height, screenH - 20));
         saveConfiguration();
@@ -212,12 +209,12 @@ public class SandboxWidget {
     public void startRepositioning() {
         if (enabled) {
             isRepositioning = true;
-            MinecraftClient client = MinecraftClient.getInstance();
-            client.mouse.unlockCursor();
+            Minecraft client = Minecraft.getInstance();
+            client.mouseHandler.releaseMouse();
             if (client.player != null) {
-                client.player.sendMessage(
-                    Text.literal("Mouse cursor unlocked. Click anywhere to position the widget.")
-                    .setStyle(Style.EMPTY.withColor(Formatting.YELLOW)), 
+                client.player.displayClientMessage(
+                    Component.literal("Mouse cursor unlocked. Click anywhere to position the widget.")
+                    .setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW)), 
                     false
                 );
             }
@@ -229,7 +226,7 @@ public class SandboxWidget {
     public void stopRepositioning() {
         if (isRepositioning) {
             isRepositioning = false;
-            MinecraftClient.getInstance().mouse.lockCursor();
+            Minecraft.getInstance().mouseHandler.grabMouse();
             InventoryReader.LOGGER.info("Widget repositioning mode deactivated");
             saveConfiguration();
         }
@@ -242,12 +239,12 @@ public class SandboxWidget {
             widgetX = (int)mouseX;
             widgetY = (int)mouseY;
             isRepositioning = false;
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.player != null) {
-                Text message = Text.literal("Widget position set: X:" + widgetX + ", Y:" + widgetY)
-                    .setStyle(Style.EMPTY.withColor(Formatting.GREEN));
-                client.player.sendMessage(message, true);
-                client.mouse.lockCursor();
+                Component message = Component.literal("Widget position set: X:" + widgetX + ", Y:" + widgetY)
+                    .setStyle(Style.EMPTY.withColor(ChatFormatting.GREEN));
+                client.player.displayClientMessage(message, true);
+                client.mouseHandler.grabMouse();
             }
             return true;
         } else if (enabled && selectedRecipe != null && recipeTree != null) {
@@ -280,15 +277,15 @@ public class SandboxWidget {
                     expandedNodes.put(nodeKey, !expanded);
                     return true;
                 } else {
-                    MinecraftClient client = MinecraftClient.getInstance();
+                    Minecraft client = Minecraft.getInstance();
                     Map<String, Integer> resources = resourcesManager.getAllResources();
                     int available = resources.getOrDefault(node.name, 0);
                     int remainingNeeded = node.amount;
                     boolean hasEnough = remainingNeeded == 0;
-                    Text message = Text.literal("You need " + remainingNeeded + " more " + node.name + " (Have: " + available + ")")
-                        .setStyle(Style.EMPTY.withColor(hasEnough ? Formatting.GREEN : Formatting.RED));
+                    Component message = Component.literal("You need " + remainingNeeded + " more " + node.name + " (Have: " + available + ")")
+                        .setStyle(Style.EMPTY.withColor(hasEnough ? ChatFormatting.GREEN : ChatFormatting.RED));
                     if (client.player != null) {
-                        client.player.sendMessage(message, true);
+                        client.player.displayClientMessage(message, true);
                     }
                     return true;
                 }
@@ -371,12 +368,12 @@ public class SandboxWidget {
         }
         return new RecipeManager.RecipeNode(resourceNode.name, resourceNode.amount, ingredients);
     }
-    private void render(DrawContext context) {
+    private void render(GuiGraphics context) {
         if (!enabled || selectedRecipe == null || recipeTree == null) {
             return;
         }
-    MinecraftClient client = MinecraftClient.getInstance();
-    int height = client.getWindow().getScaledHeight();
+    Minecraft client = Minecraft.getInstance();
+    int height = client.getWindow().getGuiScaledHeight();
     int panelWidth = widgetWidth;
     int visibleLines = countVisibleRecipeTreeLines(recipeTree, selectedRecipe);
     int panelMaxHeight = Math.min(height - 40, widgetHeight);
@@ -407,8 +404,9 @@ public class SandboxWidget {
         int borderColor = 0xFFDAA520;
         int borderThickness = 2;
         for (int i = 0; i < borderThickness; i++) {
-            context.drawBorder(
-                panelX - i, 
+            drawBorder(
+                context,
+                panelX - i,
                 panelY - i, 
                 panelWidth + i * 2, 
                 panelHeight + i * 2, 
@@ -416,30 +414,30 @@ public class SandboxWidget {
             );
         }
         
-        Text title = Text.literal("Recipe: " + selectedRecipe)
-            .setStyle(Style.EMPTY.withColor(Formatting.GOLD).withBold(true));
-        int titleWidth = client.textRenderer.getWidth(title);
+        Component title = Component.literal("Recipe: " + selectedRecipe)
+            .setStyle(Style.EMPTY.withColor(ChatFormatting.GOLD).withBold(true));
+        int titleWidth = client.font.width(title);
         int maxTitleWidth = Math.max(20, panelWidth - 10);
         float titleScale = titleWidth > maxTitleWidth ? (float)maxTitleWidth / (float)titleWidth : 1.0f;
-        context.getMatrices().push();
-        context.getMatrices().translate(panelX + (panelWidth - Math.min(titleWidth, maxTitleWidth)) / 2f, panelY + 5, 0);
-        context.getMatrices().scale(titleScale, titleScale, 1);
-        context.drawText(
-            client.textRenderer,
+        context.pose().pushMatrix();
+        context.pose().translate(panelX + (panelWidth - Math.min(titleWidth, maxTitleWidth)) / 2f, panelY + 5);
+        context.pose().scale(titleScale, titleScale);
+        context.drawString(
+            client.font,
             title,
             0,
             0,
             0xFFFFFFFF,
             false
         );
-        context.getMatrices().pop();
-        
+        context.pose().popMatrix();
+
         if (isRepositioning) {
             String repoText = "◆ Click to place widget ◆";
-            context.drawText(
-                client.textRenderer,
+            context.drawString(
+                client.font,
                 repoText,
-                panelX + panelWidth - client.textRenderer.getWidth(repoText) - 5,
+                panelX + panelWidth - client.font.width(repoText) - 5,
                 panelY + panelHeight - 12,
                 GOLD,
                 true
@@ -490,9 +488,9 @@ public class SandboxWidget {
         }
         return count;
     }
-    private int renderRecipeTree(DrawContext context, RecipeManager.RecipeNode node, int x, int y, int level, String pathKey) {
+    private int renderRecipeTree(GuiGraphics context, RecipeManager.RecipeNode node, int x, int y, int level, String pathKey) {
         if (node == null) return y;
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         int unitIndent = Math.max(4, Math.round(RECIPE_LEVEL_INDENT * currentTreeScale));
         int indent = level * unitIndent;
         boolean hasEnough = (node.amount == 0);
@@ -500,8 +498,8 @@ public class SandboxWidget {
         boolean isExpanded = expandedNodes.getOrDefault(nodeKey, false);
         boolean hasChildren = node.ingredients != null && !node.ingredients.isEmpty();
         int bgColor = 0x99271910;
-        int mouseX = (int)(client.mouse.getX() / client.getWindow().getScaleFactor());
-        int mouseY = (int)(client.mouse.getY() / client.getWindow().getScaleFactor());
+        int mouseX = (int)(client.mouseHandler.xpos() / client.getWindow().getGuiScale());
+        int mouseY = (int)(client.mouseHandler.ypos() / client.getWindow().getGuiScale());
         int nodeBaseWidth = Math.max(100, widgetWidth - 20); // account for panel padding
         int nodeHeight = Math.max(6, currentNodeLineHeight);
         boolean isHovered = mouseX >= x + indent && mouseX <= x + indent + nodeBaseWidth - indent && 
@@ -510,11 +508,11 @@ public class SandboxWidget {
         int nodeWidth = nodeBaseWidth - indent;
         context.fill(x + indent, y, x + indent + nodeWidth, y + nodeHeight, bgColor + hoverEffect);
         int borderColor = hasEnough ? 0x88608C35 : 0x88FF5555;
-        context.drawBorder(x + indent, y, nodeWidth, nodeHeight, borderColor);
+        drawBorder(context, x + indent, y, nodeWidth, nodeHeight, borderColor);
         if (hasChildren) {
             String expandIcon = isExpanded ? "▼" : "▶";
-            context.drawText(
-                client.textRenderer,
+            context.drawString(
+                client.font,
                 expandIcon,
                 x + indent + Math.max(3, Math.round(5 * currentTreeScale)),
                 y + Math.max(1, Math.round(4 * currentTreeScale)),
@@ -532,35 +530,35 @@ public class SandboxWidget {
         }
         String amountText = node.amount + "× ";
         int amountColor = hasEnough ? 0xFF6EFF6E : 0xFFFF6B6B;
-        Text itemName = Text.literal(node.name)
+        Component itemName = Component.literal(node.name)
             .setStyle(Style.EMPTY.withColor(textColor).withBold(isBold));
-    int amountWidth = client.textRenderer.getWidth(amountText);
-    int itemWidth = client.textRenderer.getWidth(itemName);
-    int totalTextWidth = amountWidth + itemWidth;
+        int amountWidth = client.font.width(amountText);
+        int itemWidth = client.font.width(itemName);
+        int totalTextWidth = amountWidth + itemWidth;
         int maxTextWidth = Math.max(10, nodeWidth - (hasChildren ? Math.max(14, Math.round(25 * currentTreeScale)) : Math.max(6, Math.round(10 * currentTreeScale))));
         int adjustedMaxTextWidth = (int)Math.floor(maxTextWidth / Math.max(0.01f, currentTreeScale));
         float textScaleLocal = totalTextWidth > adjustedMaxTextWidth ? (float)adjustedMaxTextWidth / (float)totalTextWidth : 1.0f;
         float textScale = Math.min(1.0f, textScaleLocal) * currentTreeScale;
-        context.getMatrices().push();
-        context.getMatrices().translate(nameX, y + Math.max(1, Math.round(4 * currentTreeScale)), 0);
-        context.getMatrices().scale(textScale, textScale, 1);
-        context.drawText(
-            client.textRenderer,
+        context.pose().pushMatrix();
+        context.pose().translate(nameX, y + Math.max(1, Math.round(4 * currentTreeScale)));
+        context.pose().scale(textScale, textScale);
+        context.drawString(
+            client.font,
             amountText,
             0,
             0,
             amountColor,
             false
         );
-        context.drawText(
-            client.textRenderer,
+        context.drawString(
+            client.font,
             itemName,
             amountWidth,
             0,
             0xFFFFFFFF,
             false
         );
-        context.getMatrices().pop();
+        context.pose().popMatrix();
         y += nodeHeight;
     if (hasChildren && isExpanded && node.ingredients.size() > 0) {
             int lineColor = 0xFF777777;
@@ -596,8 +594,8 @@ public class SandboxWidget {
             }
         }
     }
-    private void drawMessages(DrawContext context, int x, int y, int width, int maxY) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void drawMessages(GuiGraphics context, int x, int y, int width, int maxY) {
+        Minecraft client = Minecraft.getInstance();
         int baseHeader = 13;
         int baseLine = 10;
         int availableHeight = Math.max(0, maxY - y);
@@ -606,20 +604,20 @@ public class SandboxWidget {
         float scale = desiredHeight > 0 ? Math.min(1.0f, Math.max(0.4f, (float)availableHeight / (float)desiredHeight)) : 1.0f;
 
         if (y + Math.round(baseLine * scale) <= maxY) {
-            Text messagesHeader = Text.literal("Craftable -")
-                .setStyle(Style.EMPTY.withColor(Formatting.YELLOW).withBold(true));
-            context.getMatrices().push();
-            context.getMatrices().translate(x + 5, y, 0);
-            context.getMatrices().scale(scale, scale, 1);
-            context.drawText(
-                client.textRenderer,
+            Component messagesHeader = Component.literal("Craftable -")
+                .setStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW).withBold(true));
+            context.pose().pushMatrix();
+            context.pose().translate(x + 5, y);
+            context.pose().scale(scale, scale);
+            context.drawString(
+                client.font,
                 messagesHeader,
                 0,
                 0,
                 0xFFFFFFFF,
                 false
             );
-            context.getMatrices().pop();
+            context.pose().popMatrix();
         } else {
             return;
         }
@@ -649,20 +647,20 @@ public class SandboxWidget {
             String[] words = message.split(" ");
             StringBuilder line = new StringBuilder();
             for (String word : words) {
-                if (client.textRenderer.getWidth(line.toString() + word) > unscaledWrapWidth) {
+                if (client.font.width(line.toString() + word) > unscaledWrapWidth) {
                     if (y + Math.round(baseLine * scale) > maxY) return;
-                    context.getMatrices().push();
-                    context.getMatrices().translate(x + 5, y, 0);
-                    context.getMatrices().scale(scale, scale, 1);
-                    context.drawText(
-                        client.textRenderer,
+                    context.pose().pushMatrix();
+                    context.pose().translate(x + 5, y);
+                    context.pose().scale(scale, scale);
+                    context.drawString(
+                        client.font,
                         line.toString(),
                         0,
                         0,
                         textColor,
                         false
                     );
-                    context.getMatrices().pop();
+                    context.pose().popMatrix();
                     y += Math.round(baseLine * scale);
                     line = new StringBuilder(message.startsWith("   ") ? "      " : "   ").append(word).append(" ");
                 } else {
@@ -671,18 +669,18 @@ public class SandboxWidget {
             }
             if (line.length() > 0) {
                 if (y + Math.round((baseLine - 1) * scale) > maxY) return;
-                context.getMatrices().push();
-                context.getMatrices().translate(x + 5, y, 0);
-                context.getMatrices().scale(scale, scale, 1);
-                context.drawText(
-                    client.textRenderer,
+                context.pose().pushMatrix();
+                context.pose().translate(x + 5, y);
+                context.pose().scale(scale, scale);
+                context.drawString(
+                    client.font,
                     line.toString(),
                     0,
                     0,
                     textColor,
                     false
                 );
-                context.getMatrices().pop();
+                context.pose().popMatrix();
                 y += Math.round((baseLine - 1) * scale);
             }
         }
@@ -716,7 +714,7 @@ public class SandboxWidget {
         updateRecipeData();
         saveConfiguration();
     }
-    private int countMessageLines(MinecraftClient client, int width) {
+    private int countMessageLines(Minecraft client, int width) {
         int lineCount = 1;
         if (messages.isEmpty()) return lineCount;
         if (messages.size() == 1 && messages.get(0).equals("Craftable -")) return lineCount;
@@ -726,7 +724,7 @@ public class SandboxWidget {
             StringBuilder line = new StringBuilder();
             int linesInMessage = 1;
             for (String word : words) {
-                if (client.textRenderer.getWidth(line.toString() + word) > width - 15) {
+                if (client.font.width(line.toString() + word) > width - 15) {
                     linesInMessage++;
                     line = new StringBuilder(message.startsWith("   ") ? "      " : "   ").append(word).append(" ");
                 } else {
@@ -743,4 +741,13 @@ public class SandboxWidget {
         if (name == null || name.isEmpty()) return parent;
         return parent + ">" + name;
     }
+
+    // Helper method to draw borders since drawBorder was removed from the rendering API in 1.21.10
+    private static void drawBorder(GuiGraphics context, int x, int y, int width, int height, int color) {
+        context.fill(x, y, x + width, y + 1, color);
+        context.fill(x, y + height - 1, x + width, y + height, color);
+        context.fill(x, y, x + 1, y + height, color);
+        context.fill(x + width - 1, y, x + width, y + height, color);
+    }
 }
+

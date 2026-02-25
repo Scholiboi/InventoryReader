@@ -1,10 +1,14 @@
-package inventoryreader.ir.recipes; // Uses data sourced from NotEnoughUpdates-REPO
+package inventoryreader.ir.recipes;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
+import io.github.moulberry.repo.NEURepository;
+import io.github.moulberry.repo.NEURepositoryException;
+import io.github.moulberry.repo.data.NEUCraftingRecipe;
+import io.github.moulberry.repo.data.NEUForgeRecipe;
+import io.github.moulberry.repo.data.NEUIngredient;
+import io.github.moulberry.repo.data.NEUItem;
+import io.github.moulberry.repo.data.NEURecipe;
 import inventoryreader.ir.FilePathManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,9 +23,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +100,7 @@ public final class RemoteRecipeFetcher {
             String newEtag = resp.headers().firstValue("etag").orElse("");
             if (!newEtag.isEmpty()) { meta.put(etagKey, newEtag); writeMeta(FilePathManager.REMOTE_META_JSON, meta); }
 
+            inventoryreader.ir.RecipeManager.getInstance().reload();
             RecipeRegistry.bootstrap();
             return true;
         } catch (Exception e) {
@@ -147,74 +154,55 @@ public final class RemoteRecipeFetcher {
                 metaValToWrite = cur;
             }
 
-            java.util.zip.ZipInputStream zin = new java.util.zip.ZipInputStream(inputStream);
-            // First pass: collect recipes keyed by output internal name, and collect internal->display map
-            Map<String, Map<String, Integer>> outToIngInternal = new LinkedHashMap<>();
+            Path repoExtracted = FilePathManager.NEU_REPO_EXTRACTED.toPath();
+            deleteDirectoryRecursively(repoExtracted);
+            extractZipStrippingRoot(inputStream, repoExtracted);
+            LOGGER.info("NEU ZIP extracted to {}", repoExtracted);
+
+            NEURepository neuRepo = NEURepository.of(repoExtracted);
+            try {
+                neuRepo.reload();
+            } catch (NEURepositoryException e) {
+                LOGGER.warn("NEU repo load had issues: {}", e.toString());
+                if (neuRepo.isIncomplete()) { LOGGER.warn("Repo incomplete after reload, aborting"); return false; }
+            }
+
             Map<String, String> internalToDisplay = new LinkedHashMap<>();
+            for (NEUItem item : neuRepo.getItems().getItems().values()) {
+                String id = item.getSkyblockItemId();
+                String display = stripMC(item.getDisplayName());
+                if (id != null && !id.isBlank() && display != null && !display.isBlank()) {
+                    internalToDisplay.putIfAbsent(id, display);
+                }
+            }
 
-            java.util.zip.ZipEntry ze;
-            byte[] buf = new byte[16 * 1024];
-            while ((ze = zin.getNextEntry()) != null) {
-                String name = ze.getName();
-                if (ze.isDirectory()) continue;
-                if (!isNeuItemsJsonEntry(name)) continue;
-                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream((int)Math.min(ze.getSize() > 0 ? ze.getSize() : 4096, 1_000_000));
-                int r;
-                while ((r = zin.read(buf)) > 0) baos.write(buf, 0, r);
-                String json = baos.toString(StandardCharsets.UTF_8);
-                try {
-                    JsonElement el = JsonParser.parseString(json);
-                    if (!el.isJsonObject()) continue;
-                    JsonObject obj = el.getAsJsonObject();
-                    String internal = optString(obj, "internalname");
-                    String display = stripMC(optString(obj, "displayname"));
-                    if (!internal.isEmpty()) {
-                        if (!display.isEmpty()) internalToDisplay.putIfAbsent(internal, display);
-                        JsonObject recipe = obj.has("recipe") && obj.get("recipe").isJsonObject() ? obj.getAsJsonObject("recipe") : null;
-                        if (recipe != null && !recipe.entrySet().isEmpty()) {
-                            Map<String, Integer> ing = outToIngInternal.computeIfAbsent(internal, k -> new LinkedHashMap<>());
-                            for (Map.Entry<String, JsonElement> e : recipe.entrySet()) {
-                                String v = e.getValue().isJsonPrimitive() ? e.getValue().getAsString() : "";
-                                if (v == null || v.isBlank()) continue;
-                                String item;
-                                int count = 1;
-                                int colon = v.lastIndexOf(':');
-                                if (colon > 0) {
-                                    item = v.substring(0, colon);
-                                    try { count = Integer.parseInt(v.substring(colon + 1)); } catch (NumberFormatException ignore) { count = 1; }
-                                } else {
-                                    item = v;
-                                }
-                                if (item.isBlank()) continue;
-                                ing.merge(item, count, Integer::sum);
-                            }
-                        }
+            Map<String, Map<String, Integer>> craftingByInternal = new LinkedHashMap<>();
+            Map<String, Map<String, Integer>> forgeByInternal    = new LinkedHashMap<>();
+            for (NEUItem item : neuRepo.getItems().getItems().values()) {
+                for (NEURecipe recipe : item.getRecipes()) {
+                    if (recipe instanceof NEUCraftingRecipe cr) {
+                        collectRecipeIngredients(craftingByInternal, cr.getAllOutputs(), cr.getAllInputs());
+                    } else if (recipe instanceof NEUForgeRecipe fr) {
+                        collectRecipeIngredients(forgeByInternal, fr.getAllOutputs(), fr.getAllInputs());
                     }
-                } catch (Exception ignore) {
                 }
             }
-            try { zin.close(); } catch (Exception ignore) {}
 
-            if (outToIngInternal.isEmpty()) { LOGGER.warn("NEU ZIP contained no recipes"); return false; }
+            Map<String, Map<String, Integer>> craftingWire = resolveToDisplayNames(craftingByInternal, internalToDisplay);
+            Map<String, Map<String, Integer>> forgeWire    = resolveToDisplayNames(forgeByInternal,    internalToDisplay);
 
-            Map<String, Map<String, Integer>> wire = new LinkedHashMap<>(outToIngInternal.size());
-            for (Map.Entry<String, Map<String, Integer>> e : outToIngInternal.entrySet()) {
-                String outInternal = e.getKey();
-                String outDisplay = internalToDisplay.getOrDefault(outInternal, outInternal);
-                Map<String, Integer> ingDisplay = new LinkedHashMap<>();
-                for (Map.Entry<String, Integer> in : e.getValue().entrySet()) {
-                    String ingName = internalToDisplay.getOrDefault(in.getKey(), in.getKey());
-                    ingDisplay.put(ingName, in.getValue());
-                }
-                wire.put(outDisplay, ingDisplay);
-            }
-
-            writeRemoteSnapshot(wire);
+            if (!craftingWire.isEmpty()) writeRemoteSnapshot(craftingWire);
+            if (!forgeWire.isEmpty())    writeForgeSnapshot(forgeWire);
 
             java.util.Set<String> names = new java.util.LinkedHashSet<>();
-            names.addAll(wire.keySet());
-            for (java.util.Map<String, Integer> m : wire.values()) names.addAll(m.keySet());
+            names.addAll(craftingWire.keySet());
+            for (Map<String, Integer> m : craftingWire.values()) names.addAll(m.keySet());
+            names.addAll(forgeWire.keySet());
+            for (Map<String, Integer> m : forgeWire.values()) names.addAll(m.keySet());
             inventoryreader.ir.FilePathManager.ensureResourceNames(names);
+
+            LOGGER.info("NEU repo parsed (library): {} crafting, {} forge recipes", craftingWire.size(), forgeWire.size());
+            inventoryreader.ir.RecipeManager.getInstance().reload();
 
             if (metaValToWrite != null && !metaValToWrite.isEmpty()) {
                 meta.put(metaKey, metaValToWrite);
@@ -229,20 +217,92 @@ public final class RemoteRecipeFetcher {
         }
     }
 
-    private static boolean isNeuItemsJsonEntry(String name) {
-        if (name == null || !name.endsWith(".json")) return false;
-        return name.startsWith("items/") || name.contains("/items/");
+    /** Adds {@code output → {ingredient: count}} mappings into {@code target}, keyed by internal SkyBlock ID. */
+    private static void collectRecipeIngredients(
+            Map<String, Map<String, Integer>> target,
+            Collection<NEUIngredient> outputs,
+            Collection<NEUIngredient> inputs) {
+        if (outputs == null || outputs.isEmpty()) return;
+        NEUIngredient output = outputs.iterator().next();
+        if (output == null || NEUIngredient.NEU_SENTINEL_EMPTY.equals(output.getItemId())) return;
+        Map<String, Integer> ing = target.computeIfAbsent(output.getItemId(), k -> new LinkedHashMap<>());
+        if (inputs == null) return;
+        for (NEUIngredient in : inputs) {
+            if (in == null || NEUIngredient.NEU_SENTINEL_EMPTY.equals(in.getItemId())) continue;
+            int amt = (int) Math.max(1, Math.ceil(in.getAmount()));
+            ing.merge(in.getItemId(), amt, Integer::sum);
+        }
+    }
+
+    /** Returns a new map with all internal SkyBlock IDs replaced by their display names. */
+    private static Map<String, Map<String, Integer>> resolveToDisplayNames(
+            Map<String, Map<String, Integer>> byInternal,
+            Map<String, String> internalToDisplay) {
+        Map<String, Map<String, Integer>> wire = new LinkedHashMap<>(byInternal.size());
+        for (Map.Entry<String, Map<String, Integer>> e : byInternal.entrySet()) {
+            String outDisplay = internalToDisplay.getOrDefault(e.getKey(), e.getKey());
+            Map<String, Integer> ingDisplay = new LinkedHashMap<>();
+            for (Map.Entry<String, Integer> in : e.getValue().entrySet()) {
+                ingDisplay.put(internalToDisplay.getOrDefault(in.getKey(), in.getKey()), in.getValue());
+            }
+            wire.put(outDisplay, ingDisplay);
+        }
+        return wire;
+    }
+
+    /**
+     * Extracts a ZIP input stream into {@code targetDir}, stripping the single top-level directory
+     * that GitHub archive ZIPs always include (e.g. {@code NotEnoughUpdates-REPO-{sha}/}).
+     */
+    private static void extractZipStrippingRoot(InputStream inputStream, Path targetDir) throws Exception {
+        Files.createDirectories(targetDir);
+        try (java.util.zip.ZipInputStream zin = new java.util.zip.ZipInputStream(inputStream)) {
+            java.util.zip.ZipEntry ze;
+            while ((ze = zin.getNextEntry()) != null) {
+                if (ze.isDirectory()) continue;
+                String name = ze.getName();
+                int slash = name.indexOf('/');
+                if (slash < 0) continue;                        // no subdirectory — skip
+                String stripped = name.substring(slash + 1);
+                if (stripped.isBlank()) continue;
+                Path dest = targetDir.resolve(stripped).normalize();
+                if (!dest.startsWith(targetDir)) {              // guard against path traversal
+                    LOGGER.error("ZIP path traversal blocked: {}", name);
+                    continue;
+                }
+                Files.createDirectories(dest.getParent());
+                Files.copy(zin, dest, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+    }
+
+    /** Recursively deletes {@code dir} and all its contents, silently ignoring errors. */
+    private static void deleteDirectoryRecursively(Path dir) {
+        if (!Files.exists(dir)) return;
+        try {
+            Files.walk(dir)
+                .sorted(java.util.Comparator.reverseOrder())
+                .forEach(p -> { try { Files.delete(p); } catch (Exception ignore) {} });
+        } catch (Exception ignore) {}
     }
 
     private static void writeRemoteSnapshot(Map<String, ?> data) throws Exception {
-        File tmp = new File(FilePathManager.DATA_DIR, "recipes_remote.json.tmp");
+        writeSnapshot(data, FilePathManager.REMOTE_RECIPES_JSON, "recipes_remote.json.tmp");
+    }
+
+    private static void writeForgeSnapshot(Map<String, ?> data) throws Exception {
+        writeSnapshot(data, FilePathManager.REMOTE_FORGE_JSON, "recipes_remote_forge.json.tmp");
+    }
+
+    private static void writeSnapshot(Map<String, ?> data, File dest, String tmpName) throws Exception {
+        File tmp = new File(FilePathManager.DATA_DIR, tmpName);
         try (FileWriter fw = new FileWriter(tmp, StandardCharsets.UTF_8)) {
             GSON.toJson(data, fw);
         }
         try {
-            Files.move(tmp.toPath(), FilePathManager.REMOTE_RECIPES_JSON.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (Exception e) {
-            Files.move(tmp.toPath(), FilePathManager.REMOTE_RECIPES_JSON.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
@@ -287,12 +347,6 @@ public final class RemoteRecipeFetcher {
         try (FileWriter fw = new FileWriter(f, StandardCharsets.UTF_8)) {
             GSON.toJson(meta, fw);
         } catch (Exception ignored) {}
-    }
-
-    private static String optString(JsonObject o, String k) {
-        if (o == null || k == null) return "";
-        JsonElement e = o.get(k);
-        return e == null || e.isJsonNull() ? "" : (e.isJsonPrimitive() ? e.getAsString() : e.toString());
     }
 
     private static String stripMC(String s) {

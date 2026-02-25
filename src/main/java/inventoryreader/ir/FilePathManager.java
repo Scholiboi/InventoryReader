@@ -41,8 +41,11 @@ public class FilePathManager {
     public static final File GEMSTONE_RECIPES_JSON = new File(FilePathManager.DATA_DIR, "gemstone_recipes.v" + MOD_VERSION + ".json");
     public static final File MERGED_RECIPES_JSON = new File(FilePathManager.DATA_DIR, "recipes_all.json");
     public static final File REMOTE_RECIPES_JSON = new File(FilePathManager.DATA_DIR, "recipes_remote.json");
+    public static final File REMOTE_FORGE_JSON = new File(FilePathManager.DATA_DIR, "recipes_remote_forge.json");
     public static final File REMOTE_SOURCES_JSON = new File(FilePathManager.DATA_DIR, "remote_sources.json");
     public static final File REMOTE_META_JSON = new File(FilePathManager.DATA_DIR, "remote_sources_meta.json");
+    /** Extracted NEU-REPO ZIP contents — read by NEURepository via the neurepoparser library. */
+    public static final File NEU_REPO_EXTRACTED = new File(FilePathManager.DATA_DIR, "neu-repo-extracted");
     private static volatile boolean RESOURCES_SEEDED = false;
 
     static {
@@ -52,6 +55,7 @@ public class FilePathManager {
     public static void initializeDirectories() {
         createDirectory(MOD_DIR);
         createDirectory(DATA_DIR);
+        createDirectory(NEU_REPO_EXTRACTED);
         initializeFiles();
     }
 
@@ -152,6 +156,7 @@ public class FilePathManager {
         addRecipeFileNames(FORGING_JSON, names);
         addRecipeFileNames(GEMSTONE_RECIPES_JSON, names);
         addRecipeFileNames(REMOTE_RECIPES_JSON, names);
+        addRecipeFileNames(REMOTE_FORGE_JSON, names);
         ensureResourceNames(names);
         RESOURCES_SEEDED = true;
         try {
@@ -172,19 +177,16 @@ public class FilePathManager {
 
     private static void migrateLegacyFilenames() {
         try {
-            // resources.json -> resources.vX.json
             File legacyResources = new File(DATA_DIR, "resources.json");
             if (legacyResources.exists() && !file_resources.exists()) {
                 safeMove(legacyResources, file_resources);
             }
 
-            // forging.json -> forging.vX.json
             File legacyForging = new File(DATA_DIR, "forging.json");
             if (legacyForging.exists() && !FORGING_JSON.exists()) {
                 safeMove(legacyForging, FORGING_JSON);
             }
 
-            // gemstone_recipes.json -> gemstone_recipes.vX.json
             File legacyGem = new File(DATA_DIR, "gemstone_recipes.json");
             if (legacyGem.exists() && !GEMSTONE_RECIPES_JSON.exists()) {
                 safeMove(legacyGem, GEMSTONE_RECIPES_JSON);
@@ -639,6 +641,23 @@ public class FilePathManager {
                 if (name.matches("\\d+")) continue;
                 if (!resources.containsKey(name)) { resources.put(name, 0); changed = true; }
             }
+
+            // Remove plain-name duplicates when a symbol-prefixed version exists.
+            // e.g. if "☂ Fine Aquamarine Gemstone" is present, remove "Fine Aquamarine Gemstone".
+            Set<String> symbolStripped = new java.util.HashSet<>();
+            for (String key : resources.keySet()) {
+                if (key.length() > 2 && key.codePointAt(0) > 127 && key.charAt(1) == ' ') {
+                    symbolStripped.add(key.substring(2));
+                }
+            }
+            if (!symbolStripped.isEmpty()) {
+                Iterator<Map.Entry<String,Integer>> sit = resources.entrySet().iterator();
+                while (sit.hasNext()) {
+                    String key = sit.next().getKey();
+                    if (symbolStripped.contains(key)) { sit.remove(); changed = true; }
+                }
+            }
+
             if (changed) {
                 try (FileWriter writer = new FileWriter(file_resources)) {
                     new GsonBuilder().setPrettyPrinting().create().toJson(resources, writer);

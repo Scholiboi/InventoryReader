@@ -36,11 +36,11 @@ public class RecipeFileGenerator {
         ));
         forgingRecipes.put("Fuel Canister", mapOf("Enchanted Coal Block", 2));
         forgingRecipes.put("Gemstone Mixture", mapOf(
-            new String[]{"Fine Jade Gemstone", "Fine Amber Gemstone", "Fine Amethyst Gemstone", "Fine Sapphire Gemstone", "Sludge Juice"},
+            new String[]{"☘ Fine Jade Gemstone", "⸕ Fine Amber Gemstone", "❈ Fine Amethyst Gemstone", "✎ Fine Sapphire Gemstone", "Sludge Juice"},
             new int[]{4, 4, 4, 4, 320}
         ));
         forgingRecipes.put("Glacite Amalgamation", mapOf(
-            new String[]{"Fine Onyx Gemstone", "Fine Citrine Gemstone", "Fine Peridot Gemstone", "Fine Aquamarine Gemstone", "Enchanted Glacite"},
+            new String[]{"☠ Fine Onyx Gemstone", "☘ Fine Citrine Gemstone", "☘ Fine Peridot Gemstone", "☂ Fine Aquamarine Gemstone", "Enchanted Glacite"},
             new int[]{4, 4, 4, 4, 256}
         ));
         forgingRecipes.put("Golden Plate", mapOf(
@@ -72,7 +72,7 @@ public class RecipeFileGenerator {
             new int[]{1, 1, 1}
         ));
         forgingRecipes.put("Ruby Drill TX-15", mapOf(
-            new String[]{"Fine Ruby Gemstone", "Fuel Canister", "Drill Motor"},
+            new String[]{"❤ Fine Ruby Gemstone", "Fuel Canister", "Drill Motor"},
             new int[]{6, 1, 1}
         ));
         forgingRecipes.put("Gemstone Drill LT-522", mapOf(
@@ -80,15 +80,15 @@ public class RecipeFileGenerator {
             new int[]{1, 3}
         ));
         forgingRecipes.put("Topaz Drill KGR-12", mapOf(
-            new String[]{"Gemstone Drill LT-522", "Flawless Topaz Gemstone", "Gemstone Mixture", "Magma Core"},
+            new String[]{"Gemstone Drill LT-522", "✧ Flawless Topaz Gemstone", "Gemstone Mixture", "Magma Core"},
             new int[]{1, 1, 3, 8}
         ));
         forgingRecipes.put("Jasper Drill X", mapOf(
-            new String[]{"Topaz Drill KGR-12", "Flawless Jasper Gemstone", "Treasurite", "Magma Core"},
+            new String[]{"Topaz Drill KGR-12", "❁ Flawless Jasper Gemstone", "Treasurite", "Magma Core"},
             new int[]{1, 1, 100, 16}
         ));
         forgingRecipes.put("Polished Topaz Rod", mapOf(
-            new String[]{"Flawless Topaz Gemstone", "Bejeweled Handle"},
+            new String[]{"✧ Flawless Topaz Gemstone", "Bejeweled Handle"},
             new int[]{2, 3}
         ));
         forgingRecipes.put("Titanium Drill DR-X355", mapOf(
@@ -104,7 +104,7 @@ public class RecipeFileGenerator {
             new int[]{1, 20, 16, 2, 10, 20}
         ));
         forgingRecipes.put("Titanium Drill DR-X655", mapOf(
-            new String[]{"Titanium Drill DR-X555", "Flawless Ruby Gemstone", "Corleonite", "Refined Diamond", "Refined Titanium", "Gemstone Mixture", "Mithril Plate"},
+            new String[]{"Titanium Drill DR-X555", "❤ Flawless Ruby Gemstone", "Corleonite", "Refined Diamond", "Refined Titanium", "Gemstone Mixture", "Mithril Plate"},
             new int[]{1, 1, 30, 5, 32, 16, 10}
         ));
         forgingRecipes.put("Chisel", mapOf(
@@ -144,15 +144,15 @@ public class RecipeFileGenerator {
             new int[]{32, 1, 2}
         ));
         forgingRecipes.put("Scorched Topaz", mapOf(
-            new String[]{"Enchanted Hard Stone", "Flawless Topaz Gemstone"},
+            new String[]{"Enchanted Hard Stone", "✧ Flawless Topaz Gemstone"},
             new int[]{128, 1}
         ));
         forgingRecipes.put("Amber Material", mapOf(
-            new String[]{"Fine Amber Gemstone", "Golden Plate"},
+            new String[]{"⸕ Fine Amber Gemstone", "Golden Plate"},
             new int[]{12, 1}
         ));
         forgingRecipes.put("Frigid Husk", mapOf(
-            new String[]{"Glacite Amalgamation", "Flawless Onyx Gemstone"},
+            new String[]{"Glacite Amalgamation", "☠ Flawless Onyx Gemstone"},
             new int[]{4, 1}
         ));
         forgingRecipes.put("Starfall Seasoning", mapOf(
@@ -161,23 +161,23 @@ public class RecipeFileGenerator {
         ));
         forgingRecipes.put("Goblin Omelette", mapOf("Goblin Egg", 96));
         forgingRecipes.put("Spicy Goblin Omelette", mapOf(
-            new String[]{"Red Goblin Egg", "Flawless Ruby Gemstone", "Goblin Omelette"},
+            new String[]{"Red Goblin Egg", "❤ Flawless Ruby Gemstone", "Goblin Omelette"},
             new int[]{96, 1, 1}
         ));
         forgingRecipes.put("Pesto Goblin Omelette", mapOf(
-            new String[]{"Green Goblin Egg", "Flawless Jade Gemstone", "Goblin Omelette"},
+            new String[]{"Green Goblin Egg", "☘ Flawless Jade Gemstone", "Goblin Omelette"},
             new int[]{96, 1, 1}
         ));
         forgingRecipes.put("Sunny Side Goblin Omelette", mapOf(
-            new String[]{"Yellow Goblin Egg", "Flawless Topaz Gemstone", "Goblin Omelette"},
+            new String[]{"Yellow Goblin Egg", "✧ Flawless Topaz Gemstone", "Goblin Omelette"},
             new int[]{96, 1, 1}
         ));
         forgingRecipes.put("Blue Cheese Goblin Omelette", mapOf(
-            new String[]{"Blue Goblin Egg", "Flawless Sapphire Gemstone", "Goblin Omelette"},
+            new String[]{"Blue Goblin Egg", "✎ Flawless Sapphire Gemstone", "Goblin Omelette"},
             new int[]{96, 1, 1}
         ));
         forgingRecipes.put("Tungsten Regulator", mapOf(
-            new String[]{"Perfect Opal Gemstone", "Fuel Canister", "Tungsten Plate"},
+            new String[]{"❂ Perfect Opal Gemstone", "Fuel Canister", "Tungsten Plate"},
             new int[]{1, 5, 5}
         ));
         forgingRecipes.put("Mithril-Plated Drill Engine", mapOf(
@@ -189,15 +189,15 @@ public class RecipeFileGenerator {
             new int[]{1, 8, 2}
         ));
         forgingRecipes.put("Ruby-Polished Drill Engine", mapOf(
-            new String[]{"Titanium-Plated Drill Engine", "Perfect Ruby Gemstone", "Precursor Apparatus", "Drill Motor"},
+            new String[]{"Titanium-Plated Drill Engine", "❤ Perfect Ruby Gemstone", "Precursor Apparatus", "Drill Motor"},
             new int[]{1, 1, 4, 5}
         ));
         forgingRecipes.put("Sapphire-Polished Drill Engine", mapOf(
-            new String[]{"Ruby-Polished Drill Engine", "Perfect Sapphire Gemstone", "Precursor Apparatus", "Drill Motor", "Plasma"},
+            new String[]{"Ruby-Polished Drill Engine", "✎ Perfect Sapphire Gemstone", "Precursor Apparatus", "Drill Motor", "Plasma"},
             new int[]{1, 3, 8, 5, 16}
         ));
         forgingRecipes.put("Amber-Polished Drill Engine", mapOf(
-            new String[]{"Sapphire-Polished Drill Engine", "Perfect Amber Gemstone", "Precursor Apparatus", "Drill Motor", "Plasma"},
+            new String[]{"Sapphire-Polished Drill Engine", "⸕ Perfect Amber Gemstone", "Precursor Apparatus", "Drill Motor", "Plasma"},
             new int[]{1, 5, 16, 5, 32}
         ));
         forgingRecipes.put("Mithril-Infused Fuel Tank", mapOf(
@@ -241,12 +241,12 @@ public class RecipeFileGenerator {
             new int[]{80, 16, 48}
         ));
         forgingRecipes.put("Travel Scroll To The Dwarven Base Camp", mapOf(
-            new String[]{"Flawless Onyx Gemstone", "Enchanted Ender Pearl"},
+            new String[]{"☠ Flawless Onyx Gemstone", "Enchanted Ender Pearl"},
             new int[]{1, 16}
         ));
         forgingRecipes.put("Power Crystal", mapOf("Nether Star", 256));
         forgingRecipes.put("Secret Railroad Pass", mapOf(
-            new String[]{"Flawless Ruby Gemstone", "Refined Mithril", "Corleonite"},
+            new String[]{"❤ Flawless Ruby Gemstone", "Refined Mithril", "Corleonite"},
             new int[]{1, 2, 8}
         ));
         forgingRecipes.put("Tungsten Key", mapOf(
@@ -303,35 +303,35 @@ public class RecipeFileGenerator {
             new int[]{32, 32, 5, 16}
         ));
         forgingRecipes.put("Helmet Of Divan", mapOf(
-            new String[]{"Flawless Ruby Gemstone", "Divan Fragment", "Gemstone Mixture"},
+            new String[]{"❤ Flawless Ruby Gemstone", "Divan Fragment", "Gemstone Mixture"},
             new int[]{1, 5, 10}
         ));
         forgingRecipes.put("Chestplate Of Divan", mapOf(
-            new String[]{"Flawless Ruby Gemstone", "Divan Fragment", "Gemstone Mixture"},
+            new String[]{"❤ Flawless Ruby Gemstone", "Divan Fragment", "Gemstone Mixture"},
             new int[]{1, 8, 10}
         ));
         forgingRecipes.put("Leggings Of Divan", mapOf(
-            new String[]{"Flawless Ruby Gemstone", "Divan Fragment", "Gemstone Mixture"},
+            new String[]{"❤ Flawless Ruby Gemstone", "Divan Fragment", "Gemstone Mixture"},
             new int[]{1, 7, 10}
         ));
         forgingRecipes.put("Boots Of Divan", mapOf(
-            new String[]{"Flawless Ruby Gemstone", "Divan Fragment", "Gemstone Mixture"},
+            new String[]{"❤ Flawless Ruby Gemstone", "Divan Fragment", "Gemstone Mixture"},
             new int[]{1, 4, 10}
         ));
         forgingRecipes.put("Amber Necklace", mapOf(
-            new String[]{"Glossy Gemstone", "Flawless Amber Gemstone"},
+            new String[]{"Glossy Gemstone", "⸕ Flawless Amber Gemstone"},
             new int[]{32, 2}
         ));
         forgingRecipes.put("Sapphire Cloak", mapOf(
-            new String[]{"Glossy Gemstone", "Flawless Sapphire Gemstone"},
+            new String[]{"Glossy Gemstone", "✎ Flawless Sapphire Gemstone"},
             new int[]{32, 2}
         ));
         forgingRecipes.put("Jade Belt", mapOf(
-            new String[]{"Glossy Gemstone", "Flawless Jade Gemstone"},
+            new String[]{"Glossy Gemstone", "☘ Flawless Jade Gemstone"},
             new int[]{32, 2}
         ));
         forgingRecipes.put("Amethyst Gauntlet", mapOf(
-            new String[]{"Glossy Gemstone", "Flawless Amethyst Gemstone"},
+            new String[]{"Glossy Gemstone", "❈ Flawless Amethyst Gemstone"},
             new int[]{32, 2}
         ));
         forgingRecipes.put("Gemstone Chamber", mapOf(
@@ -339,7 +339,7 @@ public class RecipeFileGenerator {
             new int[]{100, 1}
         ));
         forgingRecipes.put("Dwarven Handwarmers", mapOf(
-            new String[]{"Flawless Jade Gemstone", "Flawless Amber Gemstone", "Tungsten Plate", "Umber Plate"},
+            new String[]{"☘ Flawless Jade Gemstone", "⸕ Flawless Amber Gemstone", "Tungsten Plate", "Umber Plate"},
             new int[]{1, 1, 1, 1}
         ));
         forgingRecipes.put("Dwarven Metal Talisman", mapOf(
@@ -355,7 +355,7 @@ public class RecipeFileGenerator {
             new int[]{1, 1, 32}
         ));
         forgingRecipes.put("Gemstone Gauntlet", mapOf(
-            new String[]{"Flawless Ruby Gemstone", "Enchanted Gold Block"},
+            new String[]{"❤ Flawless Ruby Gemstone", "Enchanted Gold Block"},
             new int[]{8, 16}
         ));
 
@@ -398,22 +398,26 @@ public class RecipeFileGenerator {
         LOGGER.info("Generating gemstone recipes file");
         Map<String, Map<String, Integer>> gemstoneRecipes = new LinkedHashMap<>();
         String[] gemstoneTypes = {
-            "Amber", "Amethyst", "Aquamarine", "Citrine", "Jade", "Jasper",
-            "Onyx", "Opal", "Peridot", "Ruby", "Sapphire", "Topaz"
+            "⸕ Amber", "❈ Amethyst", "☂ Aquamarine", "☘ Citrine", "☘ Jade", "❁ Jasper",
+            "☠ Onyx", "❂ Opal", "☘ Peridot", "❤ Ruby", "✎ Sapphire", "✧ Topaz"
         };
         for (String type : gemstoneTypes) {
+            String[] parts = type.split(" ", 2);
+            String symbol = parts[0];
+            String name = parts[1];
+
             Map<String, Integer> fine = new LinkedHashMap<>();
-            fine.put("Flawed " + type + " Gemstone", 80);
-            gemstoneRecipes.put("Fine " + type + " Gemstone", fine);
+            fine.put(symbol + " Flawed " + name + " Gemstone", 80);
+            gemstoneRecipes.put(symbol + " Fine " + name + " Gemstone", fine);
             Map<String, Integer> flawed = new LinkedHashMap<>();
-            flawed.put("Rough " + type + " Gemstone", 80);
-            gemstoneRecipes.put("Flawed " + type + " Gemstone", flawed);
+            flawed.put(symbol + " Rough " + name + " Gemstone", 80);
+            gemstoneRecipes.put(symbol + " Flawed " + name + " Gemstone", flawed);
             Map<String, Integer> flawless = new LinkedHashMap<>();
-            flawless.put("Fine " + type + " Gemstone", 80);
-            gemstoneRecipes.put("Flawless " + type + " Gemstone", flawless);
+            flawless.put(symbol + " Fine " + name + " Gemstone", 80);
+            gemstoneRecipes.put(symbol + " Flawless " + name + " Gemstone", flawless);
             Map<String, Integer> perfect = new LinkedHashMap<>();
-            perfect.put("Flawless " + type + " Gemstone", 5);
-            gemstoneRecipes.put("Perfect " + type + " Gemstone", perfect);
+            perfect.put(symbol + " Flawless " + name + " Gemstone", 5);
+            gemstoneRecipes.put(symbol + " Perfect " + name + " Gemstone", perfect);
         }
     try (FileWriter writer = new FileWriter(FilePathManager.GEMSTONE_RECIPES_JSON)) {
             Gson gson = new GsonBuilder().setPrettyPrinting().create();

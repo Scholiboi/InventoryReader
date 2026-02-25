@@ -1,16 +1,13 @@
 package inventoryreader.ir;
 
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.LoreComponent;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.text.Text;
-// import com.google.gson.Gson;
-// import com.google.gson.GsonBuilder;
-
 import java.io.*;
 import java.util.*;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemLore;
 
 public class SackReader {
     private static final Set<String> GEMSTONE_RARITIES = new HashSet<>(Arrays.asList("Rough:", "Flawed:", "Fine:", "Flawless:", "Perfect:"));
@@ -63,7 +60,7 @@ public class SackReader {
         return needsReminder;
     }
 
-    public void saveLoreComponents(ScreenHandler handler, String title) {
+    public void saveLoreComponents(AbstractContainerMenu handler, String title) {
         List<String> sackNames = loadSackNames();
         if (sackNames.contains(title)) {
             return;
@@ -86,13 +83,13 @@ public class SackReader {
         int slotsToIterate = slots.size() - 36;
         for (int i = 0; i < slotsToIterate; i++) {
             Slot slot = slots.get(i);
-            ItemStack stack = slot.getStack();
+            ItemStack stack = slot.getItem();
             if (!stack.isEmpty()) {
-                String itemName = stack.getName().getString();
-                LoreComponent loreComponent = stack.get(DataComponentTypes.LORE);
+                String itemName = stack.getHoverName().getString();
+                ItemLore loreComponent = stack.get(DataComponents.LORE);
                 if (loreComponent != null) {
-                    List<Text> loreLines = loreComponent.lines();
-                    for (Text line : loreLines) {
+                    List<Component> loreLines = loreComponent.lines();
+                    for (Component line : loreLines) {
                         String l = line.getString();
                         if (l.contains("Stored:")) {
                             String[] parts = l.split("/");
@@ -110,22 +107,22 @@ public class SackReader {
         RESOURCES_MANAGER.saveData(sackData);
     }
 
-    private void saveGemstoneSackData(ScreenHandler handler, Map<String, Integer> sackData){
+    private void saveGemstoneSackData(AbstractContainerMenu handler, Map<String, Integer> sackData){
         List<Slot> slots = handler.slots;
         InventoryReader.LOGGER.info("Number of slots: " + slots.size());
         int slotsToIterate = slots.size() - 36; // this excludes player inventory, excludes the last 36 slots
         for (int i = 0; i < slotsToIterate; i++) {
             Slot slot = slots.get(i);
-            ItemStack stack = slot.getStack();
+            ItemStack stack = slot.getItem();
             if (!stack.isEmpty()) {
-                String itemName = stack.getName().getString();
+                String itemName = stack.getHoverName().getString();
                 if (!itemName.contains("Gemstone")) {
                     continue;
                 }
-                LoreComponent loreComponent = stack.get(DataComponentTypes.LORE);
+                ItemLore loreComponent = stack.get(DataComponents.LORE);
                 if (loreComponent != null) {
-                    List<Text> loreLines = loreComponent.lines();
-                    for (Text line : loreLines) {
+                    List<Component> loreLines = loreComponent.lines();
+                    for (Component line : loreLines) {
                         String l = line.getString();
                         String[] parts = l.split(" ");
                         if (parts.length < 4) {

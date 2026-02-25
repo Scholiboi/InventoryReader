@@ -1,9 +1,9 @@
 package inventoryreader.ir;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 public class ReminderManager {
     private static final int REMINDER_INTERVAL = 100; // 5 seconds
@@ -19,16 +19,16 @@ public class ReminderManager {
                 if (tickCounter >= REMINDER_INTERVAL) {
                     tickCounter = 0;
                     
-                    Text message = Text.literal("[Inventory Reader] ")
-                        .formatted(Formatting.GOLD)
-                        .append(Text.literal("Remember to open a sack or type ")
-                            .formatted(Formatting.WHITE))
-                        .append(Text.literal("/ir done")
-                            .formatted(Formatting.YELLOW))
-                        .append(Text.literal(" to stop this reminder.")
-                            .formatted(Formatting.WHITE));
+                    Component message = Component.literal("[Inventory Reader] ")
+                        .withStyle(ChatFormatting.GOLD)
+                        .append(Component.literal("Remember to open a sack or type ")
+                            .withStyle(ChatFormatting.WHITE))
+                        .append(Component.literal("/ir done")
+                            .withStyle(ChatFormatting.YELLOW))
+                        .append(Component.literal(" to stop this reminder.")
+                            .withStyle(ChatFormatting.WHITE));
                     
-                    MinecraftClient.getInstance().inGameHud.getChatHud()
+                    Minecraft.getInstance().gui.getChat()
                         .addMessage(message);
                 }
             } else {

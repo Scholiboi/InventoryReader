@@ -5,10 +5,10 @@ import com.google.gson.GsonBuilder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
 import com.google.gson.reflect.TypeToken;
@@ -29,51 +29,51 @@ public class InventoryReaderClient implements ClientModInitializer {
     private static final File DATA_FILE = new File(FilePathManager.DATA_DIR, "inventorydata.json");
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     // private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private static KeyBinding openSandboxViewerKey;
-    private static KeyBinding openWidgetCustomizationKey;
-    private static KeyBinding toggleWidgetKey;
-    private static KeyBinding openPositioningHudKey;
+    private static KeyMapping openSandboxViewerKey;
+    private static KeyMapping openWidgetCustomizationKey;
+    private static KeyMapping toggleWidgetKey;
+    private static KeyMapping openPositioningHudKey;
     public static boolean shouldOpenSandboxViewer = false;
     public static boolean shouldOpenWidgetCustomization = false;
 
     @Override
     public void onInitializeClient() {
-        openSandboxViewerKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        openSandboxViewerKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
             "Open Sandbox Viewer",
             GLFW.GLFW_KEY_V,
-            "Skyblock Resource Calculator"
+            KeyMapping.Category.MISC
         ));
         
-        openWidgetCustomizationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        openWidgetCustomizationKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
             "Open Widget Customization",
             GLFW.GLFW_KEY_B,
-            "Skyblock Resource Calculator"
+            KeyMapping.Category.MISC
         ));
 
-        toggleWidgetKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        toggleWidgetKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
             "Toggle Widget",
             GLFW.GLFW_KEY_H,
-            "Skyblock Resource Calculator"
+            KeyMapping.Category.MISC
         ));
 
-        openPositioningHudKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        openPositioningHudKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
             "Open Positioning HUD",
             GLFW.GLFW_KEY_J,
-            "Skyblock Resource Calculator"
+            KeyMapping.Category.MISC
         ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (openSandboxViewerKey.wasPressed() || shouldOpenSandboxViewer) {
+            if (openSandboxViewerKey.consumeClick() || shouldOpenSandboxViewer) {
                 client.execute(() -> client.setScreen(new SandboxViewer()));
                 shouldOpenSandboxViewer = false;
             }
             
-            if (openWidgetCustomizationKey.wasPressed() || shouldOpenWidgetCustomization) {
+            if (openWidgetCustomizationKey.consumeClick() || shouldOpenWidgetCustomization) {
                 client.execute(() -> client.setScreen(new WidgetCustomizationMenu()));
                 shouldOpenWidgetCustomization = false;
             }
 
-            if (toggleWidgetKey.wasPressed()) {
+            if (toggleWidgetKey.consumeClick()) {
                 client.execute(() -> {
                     SandboxWidget widget = SandboxWidget.getInstance();
                     boolean newState = !widget.isEnabled();
@@ -84,11 +84,11 @@ public class InventoryReaderClient implements ClientModInitializer {
                 });
             }
 
-            if (openPositioningHudKey.wasPressed()) {
+            if (openPositioningHudKey.consumeClick()) {
                 client.execute(() -> client.setScreen(new WidgetCustomizationMenu(true)));
             }
             
-            if (client.player != null && client.world != null) {
+            if (client.player != null && client.level != null) {
                 if (tickCounter >= 1) {
                     checkInventory(client);
                     tickCounter = 0;
@@ -118,20 +118,20 @@ public class InventoryReaderClient implements ClientModInitializer {
         }
     }
 
-    private void checkInventory(MinecraftClient client) {
+    private void checkInventory(Minecraft client) {
         assert client.player != null;
-        PlayerInventory inventory = client.player.getInventory();
+        Inventory inventory = client.player.getInventory();
         if (inventory != null) {
             String title = "Player Inventory";
             saveInventoryContents(inventory, title);
         }
     }
 
-    private void saveInventoryContents(PlayerInventory inventory, String title) {
+    private void saveInventoryContents(Inventory inventory, String title) {
         Map<String, Integer> currentInventoryData = new HashMap<>();
-        for (int i = 0; i < inventory.size(); i++) {
-            ItemStack stack = inventory.getStack(i);
-            String itemName = stack.getName().getString();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            String itemName = stack.getHoverName().getString();
             int itemCount = stack.getCount();
             if (!stack.isEmpty()) {
                 if (currentInventoryData.containsKey(itemName)) {

@@ -1,6 +1,9 @@
 package inventoryreader.ir;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import java.io.File;
 import java.io.FileReader;
@@ -10,8 +13,8 @@ import java.util.*;
 
 public class RecipeManager {
     private static final RecipeManager INSTANCE = new RecipeManager();
-    private final Map<String, Map<String, Integer>> recipes = new LinkedHashMap<>();
-    private final List<String> recipeNames = new ArrayList<>();
+    private volatile Map<String, Map<String, Integer>> recipes = Collections.emptyMap();
+    private volatile List<String> recipeNames = Collections.emptyList();
 
     private RecipeManager() {
         loadRecipes();
@@ -22,57 +25,65 @@ public class RecipeManager {
     }
 
     private void loadRecipes() {
-        recipes.clear();
-        recipeNames.clear();
         Gson gson = new Gson();
         try {
+            Map<String, Map<String, Integer>> working = new LinkedHashMap<>();
+
             Map<String, Map<String, Integer>> forging = readRecipeMap(gson, FilePathManager.FORGING_JSON);
-            Map<String, Map<String, Integer>> gemstone = readRecipeMap(gson, FilePathManager.GEMSTONE_RECIPES_JSON);
-            if (forging != null) recipes.putAll(forging);
-            if (gemstone != null) recipes.putAll(gemstone);
+            Map<String, Map<String, Integer>> remote   = readRecipeMap(gson, FilePathManager.REMOTE_RECIPES_JSON);
+            Map<String, Map<String, Integer>> remoteForge = readRecipeMap(gson, FilePathManager.REMOTE_FORGE_JSON);
 
-            File remote = FilePathManager.REMOTE_RECIPES_JSON;
-            if (remote.exists() && remote.length() > 0) {
-                try (FileReader fr = new FileReader(remote)) {
-                    Type type = new TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
-                    Map<String, Map<String, Integer>> remoteMap = gson.fromJson(fr, type);
-                    if (remoteMap != null) {
-                        for (Map.Entry<String, Map<String, Integer>> e : remoteMap.entrySet()) {
-                            recipes.put(e.getKey(), e.getValue());
-                        }
-                    }
-                } catch (IOException ignore) {}
-            }
+            // Only use the hardcoded gemstone fallback when we have no remote data yet;
+            // once the NEU fetch has produced remote recipes, those contain the gemstone
+            // recipes with correct display names — loading both causes symbol-prefix
+            // mismatches that create duplicate entries in the recipe list.
+            boolean hasRemote = remote != null && !remote.isEmpty();
+            Map<String, Map<String, Integer>> gemstone = hasRemote
+                    ? null
+                    : readRecipeMap(gson, FilePathManager.GEMSTONE_RECIPES_JSON);
 
-            Map<String, Map<String, Integer>> sanitized = sanitizeRecipes(recipes);
-            recipes.clear();
-            recipes.putAll(sanitized);
+            if (forging != null)     working.putAll(forging);
+            if (gemstone != null)    working.putAll(gemstone);
+            if (remote != null)      working.putAll(remote);
+            if (remoteForge != null) working.putAll(remoteForge);
 
-            recipeNames.addAll(recipes.keySet());
-            Set<String> allNames = new LinkedHashSet<>();
-            allNames.addAll(recipes.keySet());
-            for (Map<String, Integer> m : recipes.values()) allNames.addAll(m.keySet());
+            Map<String, Map<String, Integer>> sanitized = sanitizeRecipes(working);
+
+            List<String> newNames = new ArrayList<>(sanitized.keySet());
+
+            Set<String> allNames = new LinkedHashSet<>(sanitized.keySet());
+            for (Map<String, Integer> m : sanitized.values()) allNames.addAll(m.keySet());
             FilePathManager.ensureResourceNames(allNames);
+
+            recipes = Collections.unmodifiableMap(sanitized);
+            recipeNames = Collections.unmodifiableList(newNames);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
+    /** Re-read all recipe files. Called by RemoteRecipeFetcher after a successful fetch. */
+    public synchronized void reload() {
+        loadRecipes();
+    }
+
     private Map<String, Map<String, Integer>> readRecipeMap(Gson gson, File file) throws IOException {
         if (file == null || !file.exists() || file.length() == 0) return null;
         try (FileReader fr = new FileReader(file)) {
-            java.lang.reflect.Type any = new com.google.gson.reflect.TypeToken<Map<String, Object>>(){}.getType();
-            Map<String, Object> root = gson.fromJson(fr, any);
-            if (root == null || root.isEmpty()) return null;
-            Object recipesNode = root.get("recipes");
-            Gson gg = new Gson();
-            java.lang.reflect.Type t = new com.google.gson.reflect.TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
-            if (recipesNode instanceof Map<?, ?> m) {
-                String json = gg.toJson(m);
-                return gg.fromJson(json, t);
+            JsonElement parsed = JsonParser.parseReader(fr);
+            if (parsed == null || parsed.isJsonNull()) return null;
+            JsonObject root = parsed.isJsonObject() ? parsed.getAsJsonObject() : null;
+            JsonObject recipesNode;
+            if (root != null && root.has("recipes") && root.get("recipes").isJsonObject()) {
+                recipesNode = root.getAsJsonObject("recipes");
+            } else if (parsed.isJsonObject()) {
+                recipesNode = parsed.getAsJsonObject();
+            } else {
+                return null;
             }
-            String json = gg.toJson(root);
-            return gg.fromJson(json, t);
+
+            java.lang.reflect.Type t = new com.google.gson.reflect.TypeToken<Map<String, Map<String, Integer>>>(){}.getType();
+            return new Gson().fromJson(recipesNode, t);
         }
     }
 
@@ -124,7 +135,7 @@ public class RecipeManager {
         if (input == null || input.isEmpty()) return Collections.emptyMap();
 
         Set<String> baseMaterials = new HashSet<>(Arrays.asList(
-            "Diamond", "Iron Ingot", "Coal", "Gold Ingot", "Lapis Lazuli", "Emerald", "Redstone", "Quartz", "White Wool"
+            "Diamond", "Iron Ingot", "Coal", "Gold Ingot", "Lapis Lazuli", "Emerald", "Redstone", "Quartz", "White Wool", "Hay Bale", "Melon"
         ));
 
         Map<String, Map<String, Integer>> out = new LinkedHashMap<>();
@@ -147,11 +158,7 @@ public class RecipeManager {
                 }
             }
 
-            boolean selfRef = false;
-            for (String k : cleaned.keySet()) {
-                if (k != null && k.equalsIgnoreCase(output)) { selfRef = true; break; }
-            }
-            if (selfRef) continue;
+            if (cleaned.isEmpty()) continue;
 
             out.put(output, cleaned);
         }

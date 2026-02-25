@@ -3,10 +3,6 @@ package inventoryreader.ir;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -15,6 +11,9 @@ import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 
 public class StorageReader {
     private static final File DATA_FILE = new File(FilePathManager.DATA_DIR, "allcontainerData.json");
@@ -52,7 +51,7 @@ public class StorageReader {
         }
     }
 
-    public void saveContainerContents(ScreenHandler handler, String title) {
+    public void saveContainerContents(AbstractContainerMenu handler, String title) {
         Map<String, Map<String, Integer>> fileSaveContainerData = loadAllContainerDataFromFile();
 
         if (!title.contains("Backpack") && !title.contains("Ender Chest") && !title.contains("The Forge") && !title.contains("Accessory Bag")) {
@@ -70,9 +69,9 @@ public class StorageReader {
 
         for (int i = 0; i < slotsToIterate; i++) {
             Slot slot = slots.get(i);
-            ItemStack stack = slot.getStack();
+            ItemStack stack = slot.getItem();
             if (!stack.isEmpty()) {
-                String itemName = stack.getName().getString();
+                String itemName = stack.getHoverName().getString();
                 int itemCount = stack.getCount();
                 newData.put(itemName, newData.getOrDefault(itemName, 0) + itemCount);
             }
@@ -82,7 +81,7 @@ public class StorageReader {
         RESOURCES_MANAGER.saveData(newData);
     }
 
-    public void compareContainerData(ScreenHandler handler, String title, Map<String, Map<String, Integer>> allcontainerData) {
+    public void compareContainerData(AbstractContainerMenu handler, String title, Map<String, Map<String, Integer>> allcontainerData) {
         List<Slot> slots = handler.slots;
         int slotsToIterate = slots.size() - 36;
 
@@ -91,9 +90,9 @@ public class StorageReader {
 
         for (int i = 0; i < slotsToIterate; i++) {
             Slot slot = slots.get(i);
-            ItemStack stack = slot.getStack();
+            ItemStack stack = slot.getItem();
             if (!stack.isEmpty()) {
-                String itemName = stack.getName().getString();
+                String itemName = stack.getHoverName().getString();
                 int itemCount = stack.getCount();
                 newData.put(itemName, newData.getOrDefault(itemName, 0) + itemCount);
             }

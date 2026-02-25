@@ -95,20 +95,37 @@ public class ResourcesManager {
 
     private void applyDeltas(Map<String, Integer> resources, Map<String, Integer> delta) {
         for (Map.Entry<String, Integer> e : delta.entrySet()) {
-            String item = e.getKey().replace("✪", "").replace("➊", "").replace("➋", "").replace("➌", "").replace("➍", "").replace("➎", "");
+            String cleaned = cleanItemName(e.getKey());
+            if (cleaned.isEmpty()) {
+                continue;
+            }
+            String targetKey = cleaned;
             int value = e.getValue();
-            if (resources.containsKey(item)) {
-                resources.put(item, resources.get(item) + value);
-            } else {
-                String[] itemSplit = item.split(" ");
-                if (itemSplit.length > 1) {
-                    String itemRefined = String.join(" ", Arrays.copyOfRange(itemSplit, 1, itemSplit.length));
-                    if (!itemRefined.trim().matches("\\d+") && resources.containsKey(itemRefined)) {
-                        resources.put(itemRefined, resources.get(itemRefined) + value);
-                    }
+            if (resources.containsKey(targetKey)) {
+                resources.put(targetKey, resources.get(targetKey) + value);
+                continue;
+            }
+            String[] itemSplit = cleaned.split(" ");
+            if (itemSplit.length > 1) {
+                String itemRefined = String.join(" ", Arrays.copyOfRange(itemSplit, 1, itemSplit.length)).trim();
+                if (!itemRefined.trim().matches("\\d+") && resources.containsKey(itemRefined)) {
+                    resources.put(itemRefined, resources.get(itemRefined) + value);
                 }
             }
         }
+    }
+
+    private String cleanItemName(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.replace("✪", "")
+                  .replace("➊", "")
+                  .replace("➋", "")
+                  .replace("➌", "")
+                  .replace("➍", "")
+                  .replace("➎", "")
+                  .trim();
     }
 
     public Map<String, Integer> getAllResources() {

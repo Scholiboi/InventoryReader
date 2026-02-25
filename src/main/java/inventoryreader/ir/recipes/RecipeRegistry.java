@@ -39,6 +39,7 @@ public final class RecipeRegistry {
             providers.add(new StaticJsonProvider("static:forging", FilePathManager.FORGING_JSON, (byte)0, 10));
             providers.add(new StaticJsonProvider("static:gemstone", FilePathManager.GEMSTONE_RECIPES_JSON, (byte)1, 10));
             providers.add(new StaticJsonProvider("remote:cached", FilePathManager.REMOTE_RECIPES_JSON, (byte)2, 20));
+            providers.add(new StaticJsonProvider("remote:forge", FilePathManager.REMOTE_FORGE_JSON, (byte)0, 25));
             File user = new File(FilePathManager.DATA_DIR, "user_recipes.json");
             providers.add(new StaticJsonProvider("user:overrides", user, (byte)3, 30));
         }
@@ -130,8 +131,13 @@ public final class RecipeRegistry {
         public Map<String, Recipe> load() throws Exception {
             if (!file.exists() || file.length() == 0) return Collections.emptyMap();
             try (FileReader fr = new FileReader(file, StandardCharsets.UTF_8)) {
+                com.google.gson.JsonElement parsed = com.google.gson.JsonParser.parseReader(fr);
+                if (parsed == null || !parsed.isJsonObject()) return Collections.emptyMap();
+                com.google.gson.JsonObject root = parsed.getAsJsonObject();
+                com.google.gson.JsonObject recipesNode = (root.has("recipes") && root.get("recipes").isJsonObject())
+                        ? root.getAsJsonObject("recipes") : root;
                 java.lang.reflect.Type t = new TypeToken<Map<String, Map<String, Number>>>(){}.getType();
-                Map<String, Map<String, Number>> raw = GSON.fromJson(fr, t);
+                Map<String, Map<String, Number>> raw = GSON.fromJson(recipesNode, t);
                 if (raw == null || raw.isEmpty()) return Collections.emptyMap();
                 Map<String, Recipe> out = new LinkedHashMap<>(raw.size());
                 for (Map.Entry<String, Map<String, Number>> e : raw.entrySet()) {
