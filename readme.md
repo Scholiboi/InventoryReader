@@ -1,4 +1,4 @@
-# Inventory Reader (Skyblock Resource Reader)
+# Inventory Reader (Skyblock Resource Calculator)
 
 Inventory Reader is a Fabric client mod for Hypixel Skyblock that tracks player inventory, containers, and sack data and provides an interactive HUD and recipe/crafting planner.
 
