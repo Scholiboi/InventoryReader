@@ -129,20 +129,22 @@ public class ResourcesManager {
     }
 
     public Map<String, Integer> getAllResources() {
-        Gson gson = new Gson();
-        if (!resourcesFile.exists() || resourcesFile.length() == 0) {
+        synchronized (RES_FILE_LOCK) {
+            Gson gson = new Gson();
+            if (!resourcesFile.exists() || resourcesFile.length() == 0) {
+                return new LinkedHashMap<>();
+            }
+            try (FileReader reader = new FileReader(resourcesFile)) {
+                Type type = new TypeToken<Map<String, Integer>>(){}.getType();
+                Map<String, Integer> resources = gson.fromJson(reader, type);
+                if (resources != null) {
+                    return new LinkedHashMap<>(resources);
+                }
+            } catch (IOException | com.google.gson.JsonSyntaxException e) {
+                // On parse error, return empty snapshot
+            }
             return new LinkedHashMap<>();
         }
-        try (FileReader reader = new FileReader(resourcesFile)) {
-            Type type = new TypeToken<Map<String, Integer>>(){}.getType();
-            Map<String, Integer> resources = gson.fromJson(reader, type);
-            if (resources != null) {
-                return new LinkedHashMap<>(resources);
-            }
-        } catch (IOException | com.google.gson.JsonSyntaxException e) {
-            // On parse error, return empty snapshot; writes are atomic so this should be rare
-        }
-        return new LinkedHashMap<>();
     }
 
     // Write JSON via a temp file then atomically move into place to avoid partial reads
@@ -162,12 +164,21 @@ public class ResourcesManager {
                     java.nio.file.StandardCopyOption.ATOMIC_MOVE
                 );
             } catch (IOException atomicFail) {
-                // Fallback if filesystem doesn't support ATOMIC_MOVE
-                java.nio.file.Files.move(
-                    tmp.toPath(),
-                    target.toPath(),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                );
+                try {
+                    // Fallback 1: non-atomic move (still fast, works on most Windows filesystems)
+                    java.nio.file.Files.move(
+                        tmp.toPath(),
+                        target.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                    );
+                } catch (IOException moveFail) {
+                    // Fallback 2: direct overwrite — used when the target file handle is
+                    // transiently held by another reader on Windows, making rename impossible.
+                    try (FileWriter fw = new FileWriter(target)) {
+                        fw.write(json);
+                    }
+                    tmp.delete();
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -266,7 +277,6 @@ public class ResourcesManager {
         for (Map.Entry<String, Integer> entry : map.entrySet()) {
             list.add(new ResourceEntry(entry.getKey(), entry.getValue()));
         }
-        // Sort resources by name for better readability in the UI
         Collections.sort(list, (a, b) -> a.name.compareTo(b.name));
         return list;
     }
@@ -279,7 +289,7 @@ public class ResourcesManager {
         Map<String, Integer> messages = new LinkedHashMap<>();
         
         // Initialize resources with default values to avoid null pointer exceptions
-        initializeResourceMaps(name, forging, highestPossibleResources, currentAvailableResources);
+        initializeResourceMaps(name, forging, highestPossibleResources, currentAvailableResources, new java.util.HashSet<>());
         
         int old = highestPossibleResources.getOrDefault(name, 0);
         buildRecipe(name, amt, forging, highestPossibleResources, currentAvailableResources, messages);
@@ -436,7 +446,11 @@ public class ResourcesManager {
 
     private void initializeResourceMaps(String targetItem, Map<String, Map<String, Integer>> forging, 
                                        Map<String, Integer> highestPossibleResources,
-                                       Map<String, Integer> currentAvailableResources) {
+                                       Map<String, Integer> currentAvailableResources,
+                                       java.util.Set<String> visited) {
+        if (!visited.add(targetItem)) {
+            return; // already visited — break the cycle
+        }
         highestPossibleResources.putIfAbsent(targetItem, 0);
         currentAvailableResources.putIfAbsent(targetItem, 0);
         
@@ -447,7 +461,7 @@ public class ResourcesManager {
                 currentAvailableResources.putIfAbsent(ingredient, 0);
                 
                 if (forging.containsKey(ingredient)) {
-                    initializeResourceMaps(ingredient, forging, highestPossibleResources, currentAvailableResources);
+                    initializeResourceMaps(ingredient, forging, highestPossibleResources, currentAvailableResources, visited);
                 }
             }
         }
@@ -466,50 +480,11 @@ public class ResourcesManager {
         public String name;
         public RecipeNode full_recipe;
         public Map<String, Integer> messages;
-        public List<String> messagesList;
-        
+
         public RemainingResponse(String name, RecipeNode fullRecipe, Map<String, Integer> messages) {
             this.name = name;
             this.full_recipe = fullRecipe;
             this.messages = messages;
-            
-            // Create a list version of messages for compatibility with the Python implementation
-            this.messagesList = new ArrayList<>();
-            for (Map.Entry<String, Integer> entry : messages.entrySet()) {
-                this.messagesList.add("You need to craft x" + entry.getValue() + " " + entry.getKey());
-            }
-        }
-        
-        public RemainingResponse(String name, RecipeNode fullRecipe, List<String> messagesList) {
-            this.name = name;
-            this.full_recipe = fullRecipe;
-            this.messagesList = messagesList;
-            
-            // Convert list to map for backward compatibility
-            this.messages = new LinkedHashMap<>();
-            for (String msg : messagesList) {
-                String[] parts = msg.split(" ");
-                if (parts.length >= 4) {
-                    String itemName = extractItemName(parts);
-                    try {
-                        int amount = Integer.parseInt(parts[3].substring(1));
-                        this.messages.put(itemName, this.messages.getOrDefault(itemName, 0) + amount);
-                    } catch (NumberFormatException e) {
-                        // Skip if we can't parse the amount
-                    }
-                }
-            }
-        }
-        
-        private String extractItemName(String[] parts) {
-            if (parts.length > 5) {
-                StringBuilder nameBuilder = new StringBuilder(parts[4]);
-                for (int i = 5; i < parts.length; i++) {
-                    nameBuilder.append(" ").append(parts[i]);
-                }
-                return nameBuilder.toString();
-            }
-            return parts[4];
         }
     }
 

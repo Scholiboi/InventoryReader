@@ -11,8 +11,6 @@ import java.io.FileWriter;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -34,11 +32,12 @@ public class FilePathManager {
     private static final String MOD_VERSION = getModVersionString();
     private static final File file_generic = new File(FilePathManager.DATA_DIR, "allcontainerData.json");
     private static final File file_inventory = new File(FilePathManager.DATA_DIR, "inventorydata.json");
-    private static final File file_resources = new File(FilePathManager.DATA_DIR, "resources.v" + MOD_VERSION + ".json");
+    private static final File file_resources = new File(FilePathManager.DATA_DIR, "resources.json");
     private static final File SACK_NAMES_FILE = new File(FilePathManager.DATA_DIR, "sackNames.txt");
     public static final File file_widget_config = new File(FilePathManager.DATA_DIR, "widget_config.json");
-    public static final File FORGING_JSON = new File(FilePathManager.DATA_DIR, "forging.v" + MOD_VERSION + ".json");
-    public static final File GEMSTONE_RECIPES_JSON = new File(FilePathManager.DATA_DIR, "gemstone_recipes.v" + MOD_VERSION + ".json");
+    public static final File FORGING_JSON = new File(FilePathManager.DATA_DIR, "forging.json");
+    public static final File GEMSTONE_RECIPES_JSON = new File(FilePathManager.DATA_DIR, "gemstone_recipes.json");
+    private static final File VERSION_FILE = new File(FilePathManager.DATA_DIR, "version.txt");
     public static final File MERGED_RECIPES_JSON = new File(FilePathManager.DATA_DIR, "recipes_all.json");
     public static final File REMOTE_RECIPES_JSON = new File(FilePathManager.DATA_DIR, "recipes_remote.json");
     public static final File REMOTE_FORGE_JSON = new File(FilePathManager.DATA_DIR, "recipes_remote_forge.json");
@@ -71,81 +70,28 @@ public class FilePathManager {
     }
 
     private static void initializeFiles() {
-    RESOURCES_SEEDED = false;
-        if (!file_generic.exists()) {
-            try {
-                file_generic.createNewFile();
-                LOGGER.info("Created file: {}", file_generic.getAbsolutePath());
-            } catch (IOException e) {
-                LOGGER.error("Failed to create file: {}", file_generic.getAbsolutePath(), e);
-            }
-        }
-
-        if (!file_inventory.exists()) {
-            try {
-                file_inventory.createNewFile();
-            } catch (IOException e) {
-            }
-        }
-        if (!SACK_NAMES_FILE.exists()) {
-            try {
-                SACK_NAMES_FILE.createNewFile();
-            } catch (IOException e) {
-            }
-        }
-
-        migrateLegacyFilenames();
-
-        ensureCurrentFilesWithCarryOver();
-
-        if (!file_widget_config.exists()) {
-            initializeWidgetConfigData(file_widget_config);
-        }
-
-        if (!REMOTE_SOURCES_JSON.exists()) {
-            initializeRemoteSourcesConfig(REMOTE_SOURCES_JSON);
-        }
-
-    cleanupAllOldVersioned();
-
-        try {
-            RecipeRegistry.bootstrap();
-        } catch (Throwable t) {
-            LOGGER.warn("RecipeRegistry bootstrap failed (continuing with static files only)", t);
-        }
-        try {
-            seedResourceNamesFromRecipes();
-        } catch (Throwable t) {
-            LOGGER.warn("Seeding resource names failed", t);
-        }
-        try {
-            RemoteRecipeFetcher.fetchAsync();
-        } catch (Throwable t) {
-            LOGGER.warn("RemoteRecipeFetcher failed to start", t);
-        }
+        RESOURCES_SEEDED = false;
+        createFileIfAbsent(file_generic);
+        createFileIfAbsent(file_inventory);
+        createFileIfAbsent(SACK_NAMES_FILE);
+        handleVersionUpgrade();
+        migrateVersionedResources();
+        cleanupStaleFiles();
+        if (!file_resources.exists()) initializeResourcesData(file_resources);
+        if (!file_widget_config.exists()) initializeWidgetConfigData(file_widget_config);
+        if (!REMOTE_SOURCES_JSON.exists()) initializeRemoteSourcesConfig(REMOTE_SOURCES_JSON);
+        try { RecipeRegistry.bootstrap(); } catch (Throwable t) { LOGGER.warn("RecipeRegistry bootstrap failed", t); }
+        try { seedResourceNamesFromRecipes(); } catch (Throwable t) { LOGGER.warn("Seeding resource names failed", t); }
+        try { RemoteRecipeFetcher.fetchAsync(); } catch (Throwable t) { LOGGER.warn("RemoteRecipeFetcher failed to start", t); }
     }
 
     public static File getResourcesFile() { return file_resources; }
 
     private static void reinitializeFiles() {
-    RESOURCES_SEEDED = false;
-        if (file_generic.exists()) {
-            file_generic.delete();
+        RESOURCES_SEEDED = false;
+        for (File f : new File[]{file_generic, file_inventory, file_resources, file_widget_config, SACK_NAMES_FILE, MERGED_RECIPES_JSON}) {
+            if (f.exists()) f.delete();
         }
-        if (file_inventory.exists()) {
-            file_inventory.delete();
-        }
-        if (file_resources.exists()) {
-            file_resources.delete();
-        }
-        if (file_widget_config.exists()) {
-            file_widget_config.delete();
-        }
-        if (SACK_NAMES_FILE.exists()) {
-            SACK_NAMES_FILE.delete();
-        }
-    if (MERGED_RECIPES_JSON.exists()) MERGED_RECIPES_JSON.delete();
-    
         initializeFiles();
     }
 
@@ -175,67 +121,6 @@ public class FilePathManager {
         } catch (Exception ignored) {}
     }
 
-    private static void migrateLegacyFilenames() {
-        try {
-            File legacyResources = new File(DATA_DIR, "resources.json");
-            if (legacyResources.exists() && !file_resources.exists()) {
-                safeMove(legacyResources, file_resources);
-            }
-
-            File legacyForging = new File(DATA_DIR, "forging.json");
-            if (legacyForging.exists() && !FORGING_JSON.exists()) {
-                safeMove(legacyForging, FORGING_JSON);
-            }
-
-            File legacyGem = new File(DATA_DIR, "gemstone_recipes.json");
-            if (legacyGem.exists() && !GEMSTONE_RECIPES_JSON.exists()) {
-                safeMove(legacyGem, GEMSTONE_RECIPES_JSON);
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Legacy filename migration failed", e);
-        }
-    }
-
-    private static void safeMove(File src, File dst) {
-        try {
-            if (!dst.getParentFile().exists()) dst.getParentFile().mkdirs();
-            Files.move(src.toPath(), dst.toPath(), StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException moveErr) {
-            try {
-                Files.copy(src.toPath(), dst.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                if (!src.delete()) {
-                    LOGGER.debug("Failed to delete legacy file after copy: {}", src.getAbsolutePath());
-                }
-            } catch (IOException copyErr) {
-                LOGGER.warn("Failed to move/copy file {} -> {}", src.getAbsolutePath(), dst.getAbsolutePath());
-            }
-        }
-    }
-
-    private static void cleanupOldVersioned(String baseName, String currentFileName) {
-        File[] olds = DATA_DIR.listFiles((dir, name) -> {
-            if (!name.startsWith(baseName)) return false;
-            if (!name.endsWith(".json")) return false;
-            if (name.equals(currentFileName)) return false;
-            return name.matches(java.util.regex.Pattern.quote(baseName) + "\\.v.+\\.json");
-        });
-        if (olds != null) {
-            for (File f : olds) {
-                try { f.delete(); } catch (Exception ignored) {}
-            }
-        }
-        File legacy = new File(DATA_DIR, baseName + ".json");
-        if (legacy.exists() && !legacy.getName().equals(currentFileName)) {
-            try { legacy.delete(); } catch (Exception ignored) {}
-        }
-    }
-
-    private static void cleanupAllOldVersioned() {
-        cleanupOldVersioned("resources", file_resources.getName());
-        cleanupOldVersioned("forging", FORGING_JSON.getName());
-        cleanupOldVersioned("gemstone_recipes", GEMSTONE_RECIPES_JSON.getName());
-    }
-
     private static String getModVersionString() {
         try {
             return FabricLoader.getInstance()
@@ -247,85 +132,48 @@ public class FilePathManager {
         }
     }
 
-    private static void ensureCurrentFilesWithCarryOver() {
+    private static void handleVersionUpgrade() {
+        String stored = "";
         try {
-            if (!file_resources.exists()) {
-                File prev = findLatestPriorVersionedFile("resources", MOD_VERSION);
-                if (prev != null) {
-                    safeCopy(prev, file_resources);
-                    LOGGER.info("Carried resources data forward from {} -> {}", prev.getName(), file_resources.getName());
-                } else {
-                    initializeResourcesData(file_resources);
-                }
-            }
-
-            if (!FORGING_JSON.exists() || !GEMSTONE_RECIPES_JSON.exists()) {
-                RecipeFileGenerator.initializeRecipeFiles();
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to ensure current versioned files with carry-over; falling back to defaults", e);
-            if (!file_resources.exists()) initializeResourcesData(file_resources);
-            if (!FORGING_JSON.exists() || !GEMSTONE_RECIPES_JSON.exists()) RecipeFileGenerator.initializeRecipeFiles();
+            if (VERSION_FILE.exists()) stored = new String(Files.readAllBytes(VERSION_FILE.toPath())).trim();
+        } catch (IOException ignored) {}
+        if (!MOD_VERSION.equals(stored)) {
+            FORGING_JSON.delete();
+            GEMSTONE_RECIPES_JSON.delete();
+            try { Files.write(VERSION_FILE.toPath(), MOD_VERSION.getBytes()); } catch (IOException ignored) {}
+            LOGGER.info("Version changed {} -> {}, reinitialising recipe files", stored.isEmpty() ? "none" : stored, MOD_VERSION);
+        }
+        if (!FORGING_JSON.exists() || !GEMSTONE_RECIPES_JSON.exists()) {
+            RecipeFileGenerator.initializeRecipeFiles();
         }
     }
 
-    private static void safeCopy(File src, File dst) {
+    private static void migrateVersionedResources() {
+        if (file_resources.exists()) return;
+        File[] versioned = DATA_DIR.listFiles((d, n) -> n.matches("resources\\.v.+\\.json"));
+        if (versioned == null || versioned.length == 0) return;
+        Arrays.sort(versioned, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
         try {
-            if (!dst.getParentFile().exists()) dst.getParentFile().mkdirs();
-            Path tmp = Paths.get(dst.getAbsolutePath() + ".tmp");
-            Files.copy(src.toPath(), tmp, StandardCopyOption.REPLACE_EXISTING);
-            try {
-                Files.move(tmp, dst.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (IOException atomic) {
-                Files.move(tmp, dst.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }
+            Files.copy(versioned[0].toPath(), file_resources.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            LOGGER.info("Migrated {} -> resources.json", versioned[0].getName());
+            for (File f : versioned) f.delete();
         } catch (IOException e) {
-            LOGGER.warn("Failed to copy file {} -> {}", src.getAbsolutePath(), dst.getAbsolutePath());
+            LOGGER.warn("Failed to migrate versioned resources: {}", e.getMessage());
         }
     }
 
-    private static File findLatestPriorVersionedFile(String baseName, String currentVersion) {
-        File[] candidates = DATA_DIR.listFiles((dir, name) -> name.startsWith(baseName + ".v") && name.endsWith(".json") && !name.equals(baseName + ".v" + currentVersion + ".json"));
-        if (candidates == null || candidates.length == 0) return null;
-        Arrays.sort(candidates, (a, b) -> {
-            String va = extractVersionFromFileName(baseName, a.getName());
-            String vb = extractVersionFromFileName(baseName, b.getName());
-            return compareVersions(va, vb);
-        });
-        // Pick the highest version less than or equal to currentVersion (allows 2.0.7 -> 2.0.7-dev)
-        String cur = currentVersion;
-        File selected = null;
-        for (int i = candidates.length - 1; i >= 0; i--) {
-            String v = extractVersionFromFileName(baseName, candidates[i].getName());
-            if (compareVersions(v, cur) <= 0) { selected = candidates[i]; break; }
-        }
-        return selected;
+    private static void createFileIfAbsent(File f) {
+        if (!f.exists()) try { f.createNewFile(); } catch (IOException e) { LOGGER.error("Failed to create {}", f.getName(), e); }
     }
 
-    private static String extractVersionFromFileName(String baseName, String fileName) {
-        int start = (baseName + ".v").length();
-        int idx = fileName.indexOf(".json");
-        if (fileName.startsWith(baseName + ".v") && idx > start) {
-            return fileName.substring(start, idx);
+    private static void cleanupStaleFiles() {
+        File[] stale = DATA_DIR.listFiles((d, n) ->
+            n.endsWith(".tmp") ||
+            n.matches("(forging|gemstone_recipes|resources)\\.v.+\\.json")
+        );
+        if (stale != null) {
+            for (File f : stale) f.delete();
         }
-        return "0";
-    }
-
-    private static int compareVersions(String a, String b) {
-        if (a == null) a = "0"; if (b == null) b = "0";
-        String[] pa = a.split("\\.");
-        String[] pb = b.split("\\.");
-        int n = Math.max(pa.length, pb.length);
-        for (int i = 0; i < n; i++) {
-            int ai = i < pa.length ? safeParseInt(pa[i]) : 0;
-            int bi = i < pb.length ? safeParseInt(pb[i]) : 0;
-            if (ai != bi) return Integer.compare(ai, bi);
-        }
-        return 0;
-    }
-
-    private static int safeParseInt(String s) {
-        try { return Integer.parseInt(s.replaceAll("[^0-9]", "")); } catch (Exception e) { return 0; }
     }
 
     private static void initializeResourcesData(File file) {
@@ -562,12 +410,10 @@ public class FilePathManager {
             resources.put(item, 0);
         }
 
-        try(FileWriter writer = new FileWriter(file)){
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            gson.toJson(resources, writer);
-            System.out.println("Resources intialized successfully in ");
-        }catch(IOException e){
-            e.printStackTrace();
+        try (FileWriter writer = new FileWriter(file)) {
+            new GsonBuilder().setPrettyPrinting().create().toJson(resources, writer);
+        } catch (IOException e) {
+            LOGGER.error("Failed to initialize resources data", e);
         }
     }
 
