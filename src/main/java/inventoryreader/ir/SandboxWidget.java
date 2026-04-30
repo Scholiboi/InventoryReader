@@ -8,7 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -19,7 +19,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class SandboxWidget {
-    private static final ResourceLocation SANDBOX_WIDGET_LAYER = ResourceLocation.fromNamespaceAndPath(InventoryReader.MOD_ID, "sandbox_widget");
+    private static final Identifier SANDBOX_WIDGET_LAYER = Identifier.fromNamespaceAndPath(InventoryReader.MOD_ID, "sandbox_widget");
     private static final int DARK_PANEL_BG = 0x99271910;
     private static final int HEADER_BG = 0xCC2C4A1B;
     private static final int GOLD = 0xFFFFB728;
